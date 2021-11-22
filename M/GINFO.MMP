@@ -1,0 +1,36 @@
+ginfo	; Shows information about the GLOBALS.DAT file
+	; by Marcelo Dantas
+	s f=4,dr=$zg
+	w !,"Information about ",dr,":GLOBALS.DAT"
+	o f:(dr:"GLOBALS.DAT":8)
+	;
+	u f:0 r *x u 0 i x=255 w !,"Empty file."
+	u f r *d1,*d2 u 0 s d=(d2*256)+d1 s:d>32767 d=d-65536 w !,"First directory block : ",d
+	u f r *b1,*b2 u 0 s b=(b2*256)+b1 s:b>32767 b=b-65536 w !,"First allocated block : ",b
+	u f r *b1,*b2 u 0 w !,"Total free data blocks: ",(b2*256)+b1
+	;
+	s bpl=50 ; Blocks per line
+	s bp=0 ; Blocks printed
+	s cb=0 ; Current block
+	s rl="      !----!----!----!----!----!----!----!----!----!----"
+	w !,"Used blocks bitmap:",!,rl
+nxt	w !,$j(cb,5)," "
+	f n=1:1:128 u f r *a u 0 s p=128 f i=1:1:8 w $s(a\p#2:"*",1:" ") s p=p\2,cb=cb+1,bp=bp+1 i bp=bpl s bp=0 w !,$j(cb,5)," "
+	w !,rl i (d2*256)+d1=65535 w !,"This GLOBALS.DAT file is empty" q
+dirblk	s sector=d*6,cc=1
+	u f:sector r *count u 0
+	w !,"Directory block "_d_" contains "_count_" entries.",! s col=0
+	f i=1:1:count d dirblk2 s cc=cc+12,col=col+16 w ?col i col>50 s col=0 w !
+	f i=cc:1:765 u f r *a u 0
+	u f r *d1,*d2 u 0 s d=(d2*256)+d1 s:d>32767 d=d-65536 g:d>0 dirblk
+	q
+dirblk2	;
+	s n="^"
+	u f r *size u 0
+	f j=1:1:size u f r *a u 0 s n=n_$c(a)
+	f k=j:1:8 u f r *a u 0
+	u f r *b1,*b2 u 0 s blk=(b2*256)+b1
+	s n=n_"->"_blk_" "
+	w n,$e("                ",1,16-$l(n))
+	q
+z	zs ginfo zp ginfo q

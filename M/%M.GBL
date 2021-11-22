@@ -1,0 +1,1356 @@
+Comments for %M* routines
+October 13, 1983   15:01
+^%M("%M","%M",0)
+11
+^%M("%M","%M",1)
+          ************************
+^%M("%M","%M",2)
+          * Programmer Utilities *
+^%M("%M","%M",3)
+          *                      *
+^%M("%M","%M",4)
+          *  John Lewkowicz      *
+^%M("%M","%M",5)
+          *  NYSCVM   1/83       *
+^%M("%M","%M",6)
+          ************************
+^%M("%M","%M",7)
+ 
+^%M("%M","%M",8)
+Main option and paramter pickup routine for programmer utility
+^%M("%M","%M",9)
+   routines to work on ROUTINES and GLOBALS. Assumes that the
+^%M("%M","%M",10)
+   terminal definition routines (%MTC & %MTCH) are loaded.
+^%M("%M","%M",11)
+ 
+^%M("%M","FDR",0)
+13
+^%M("%M","FDR",1)
+For those commands that require a source drive, get the Drive designation
+^%M("%M","FDR",2)
+   (like A, B, C...H). Variable FDR then holds this drive ID. Has different
+^%M("%M","FDR",3)
+   meanings depending on the command:
+^%M("%M","FDR",4)
+ 
+^%M("%M","FDR",5)
+   Directory - Drive on which Routines or Globals (R/G) reside.
+^%M("%M","FDR",6)
+   Edit - Drive on which R/G to be edited reside.
+^%M("%M","FDR",7)
+   List - Drive on which R/G to be listed reside.
+^%M("%M","FDR",8)
+   Find - Drive on which R/G to be searched reside.
+^%M("%M","FDR",9)
+   Change - Drive on which R/G to be changed reside.
+^%M("%M","FDR",10)
+   Save - Drive on which routines to be saved reside.
+^%M("%M","FDR",11)
+   Restore - Drive on which Save File resides.
+^%M("%M","FDR",12)
+   Kill - Drive on which R/G to be killed reside.
+^%M("%M","FDR",13)
+ 
+^%M("%M","FLAG",0)
+5
+^%M("%M","FLAG",1)
+Flag Routines or Globals (as in ^%MU) to indicate that they are
+^%M("%M","FLAG",2)
+   to be processed.
+^%M("%M","FLAG",3)
+ 
+^%M("%M","FLAG",4)
+First check to see if the directory for the type (Routine or Global)
+^%M("%M","FLAG",5)
+   is defined. If not, automatically refresh directory.
+^%M("%M","FLAG1",0)
+7
+^%M("%M","FLAG1",1)
+If Directory is defined, ask User if they want to re-fresh. If so,
+^%M("%M","FLAG1",2)
+   refresh directory before going on to flag entities. Normally it
+^%M("%M","FLAG1",3)
+   is NOT necessary to refresh routinme directory since it is auto-
+^%M("%M","FLAG1",4)
+   matically done by the routines used to create, edit, and delete
+^%M("%M","FLAG1",5)
+   routines. Globals, however, can be created "on-the-sly" and often
+^%M("%M","FLAG1",6)
+   this directory must be updated to reflect the true nature of the
+^%M("%M","FLAG1",7)
+   globals available.
+^%M("%M","FLAG2",0)
+2
+^%M("%M","FLAG2",1)
+See if User wants to use the previous list of selected Routines or
+^%M("%M","FLAG2",2)
+   Globals. If so, skip the flagging section.
+^%M("%M","FLAG3",0)
+5
+^%M("%M","FLAG3",1)
+Flag the Routines/Globals in ^%MU to indicate those that are to be
+^%M("%M","FLAG3",2)
+   operated on. User can use the "*?" characters for a wild-card field
+^%M("%M","FLAG3",3)
+   and can also indicate that they do NOT want ranges of names.
+^%M("%M","FLAG3",4)
+NOTE that if RESTORING routines or globals, The specifications are
+^%M("%M","FLAG3",5)
+   saved (^%MU("RESG" or "RESR",...)) and not the actual names.
+^%M("%M","FUN",0)
+15
+^%M("%M","FUN",1)
+Get the Function to be performed:
+^%M("%M","FUN",2)
+ 
+^%M("%M","FUN",3)
+   D - Directory
+^%M("%M","FUN",4)
+   E - Edit
+^%M("%M","FUN",5)
+   L - List
+^%M("%M","FUN",5.1)
+   F - Find all occurences of a string
+^%M("%M","FUN",5.2)
+   C - Change all occurences of one string to another
+^%M("%M","FUN",6)
+   S - Save
+^%M("%M","FUN",7)
+   R - Restore
+^%M("%M","FUN",8)
+   K - Kill
+^%M("%M","FUN",8.1)
+   X - eXtended Directory (comments or top node if global)
+^%M("%M","FUN",9)
+ 
+^%M("%M","FUN",10)
+On finishing, the variable FUN will contain a single character that
+^%M("%M","FUN",11)
+   defines the desired function, and the variable FR contains a 2-
+^%M("%M","FUN",12)
+   character string defining function and type (e.g. "LR" is List
+^%M("%M","FUN",13)
+   Routine, "LG" is List Globals).
+^%M("%M","FUN",14)
+ 
+^%M("%M","FUN",15)
+Special check here for EDITING (either Globals or Routines).
+^%M("%M","REFRESH",0)
+2
+^%M("%M","REFRESH",1)
+Refresh the appropriate directory in ^%MU to reflect the current
+^%M("%M","REFRESH",2)
+   Global or Routine names existing on the selected disk.
+^%M("%M","ROG",0)
+3
+^%M("%M","ROG",1)
+See if User wants to work on Globals or Routines. Variable "Q" has
+^%M("%M","ROG",2)
+   the question label for displaying HELP text if User enters "?" or "??".
+^%M("%M","ROG",3)
+Leave this section with ROG set to "G" for Globals, "R" for Routines.
+^%M("%M","START",0)
+12
+^%M("%M","START",1)
+Main loop entry point. Assumes that the following variables are set:
+^%M("%M","START",2)
+ 
+^%M("%M","START",3)
+   DS  - ";"
+^%M("%M","START",4)
+   FF  - character string to clear screen (from ^%MTC)
+^%M("%M","START",5)
+   RM  - Screen's right margin (from ^%MTC)
+^%M("%M","START",6)
+   HL  - character sequence to go to DIM intensity (from ^%MTC)
+^%M("%M","START",7)
+   LH  - character sequence to go to HIGH intensity (from ^%MTC)
+^%M("%M","START",8)
+   SDR - Default ROUTINE system drive to go back to after a change in 
+^%M("%M","START",9)
+         after changing a drive.
+^%M("%M","START",10)
+   SDG - Default GLOBAL system drive to return to after possibly altering
+^%M("%M","START",10.1)
+         drive to work on globals.
+^%M("%M","START",11)
+ 
+^%M("%M","START",12)
+Start by clearing screen and displaying heading.
+^%M("%M","TDR",0)
+1
+^%M("%M","TDR",1)
+If necessary, get an output device (IO).
+^%M("%M0","%M0",0)
+2
+^%M("%M0","%M0",1)
+Process some of the Programmer Utility options that can be selected
+^%M("%M0","%M0",2)
+   in option dispatch routine %M.
+^%M("%M0","DIR",0)
+5
+^%M("%M0","DIR",1)
+Display either ROUTINE or GLOBAL directory held in ^%MU (under
+^%M("%M0","DIR",2)
+   1st level subscript "ROU" or "GBL") on the current device ($I)
+^%M("%M0","DIR",3)
+   and flag selected entries with a "->".
+^%M("%M0","DIR",4)
+Before looking in ^%MU switch to desired drive (FDR) and then restore
+^%M("%M0","DIR",5)
+   back to default drives (SDR and SDG) before returning.
+^%M("%M0","GLIST",0)
+5
+^%M("%M0","GLIST",1)
+List a GLOBAL (or part of a Global) to the device specified by the
+^%M("%M0","GLIST",2)
+   variable IO.
+^%M("%M0","GLIST",3)
+ 
+^%M("%M0","GLIST",4)
+First thing to do is set to look for globals on the Drive chosen
+^%M("%M0","GLIST",5)
+   by the User (variable FDR).
+^%M("%M0","GLIST1",0)
+13
+^%M("%M0","GLIST1",1)
+Get the Global Reference to be dumped. Three types of entry can
+^%M("%M0","GLIST1",2)
+   be made:
+^%M("%M0","GLIST1",3)
+ 
+^%M("%M0","GLIST1",4)
+   1. Global Name only (NO subscripts specified) will cause the ENTIRE
+^%M("%M0","GLIST1",5)
+      global to be dumped.
+^%M("%M0","GLIST1",6)
+   2. Global reference with subscripts specified which is a COMPLETE
+^%M("%M0","GLIST1",7)
+      reference (e.g. number of right & left parenthesis are the same).
+^%M("%M0","GLIST1",8)
+      In this case ONLY the specified NODE will be listed.
+^%M("%M0","GLIST1",9)
+   3. Incomplete subscript reference (like "^ABC(1,2"). This will result
+^%M("%M0","GLIST1",10)
+      in a list of all global nodes from the specified node and DOWN
+^%M("%M0","GLIST1",11)
+      to be displayed.
+^%M("%M0","GLIST1",12)
+ 
+^%M("%M0","GLIST1",13)
+NOTE - uses the $ZO function to loop through the specified global.
+^%M("%M0","GLIST2",0)
+4
+^%M("%M0","GLIST2",1)
+Display 1 reference. Variable G1 contains the reference, and G2 con-
+^%M("%M0","GLIST2",2)
+   tains the data held at that reference. Display the reference and
+^%M("%M0","GLIST2",3)
+   then calculate where the data will be displayed (from $X) in case
+^%M("%M0","GLIST2",4)
+   the data requires more than 1 line.
+^%M("%M0","GLIST3",0)
+2
+^%M("%M0","GLIST3",1)
+Output from one to many line containing the data held at the reference.
+^%M("%M0","GLIST3",2)
+   Allign the start of each data line with the reference.
+^%M("%M0","LDIR",0)
+3
+^%M("%M0","LDIR",1)
+Display list of ROUTINES or GLOBALS in ^%MU from the chosen drive
+^%M("%M0","LDIR",2)
+   (FDR) on the selected device (IO), restoring to the default drives
+^%M("%M0","LDIR",3)
+   (SDR and SDG) before returning.
+^%M("%M0","READ",0)
+3
+^%M("%M0","READ",1)
+Standard keyboard read. return with E=0 if read OK, but if entry
+^%M("%M0","READ",2)
+   was either "?" or "??", dispatch to Help Text routine %M9 and set
+^%M("%M0","READ",3)
+   flag E=1 so question can be repeated.
+^%M("%M0","RLIST",0)
+7
+^%M("%M0","RLIST",1)
+List the ROUTINES flagged in the routine directory to the device
+^%M("%M0","RLIST",2)
+   defined in variable IO.
+^%M("%M0","RLIST",3)
+ 
+^%M("%M0","RLIST",4)
+After getting Date & Time and seeing if User wants comments listed
+^%M("%M0","RLIST",5)
+   too, initialize the variable X1-X4 from the labels X1-X4. These
+^%M("%M0","RLIST",6)
+   are eXecuted to do the actual print (since the routine that is
+^%M("%M0","RLIST",7)
+   to be printed will be loaded into the partition).
+^%M("%M0","SDIR",0)
+3
+^%M("%M0","SDIR",1)
+Display list of SELECTED Routines or Globals in ^%MU from the desired
+^%M("%M0","SDIR",2)
+   drive (FDR) on the current device ($I), restoring the drive to the
+^%M("%M0","SDIR",3)
+   default values (SDR and SDC) before returning.
+^%M("%M0","UPPER",0)
+2
+^%M("%M0","UPPER",1)
+Convert string in A to upper-case, returned in UA. Variable A is
+^%M("%M0","UPPER",2)
+   left untouched.
+^%M("%M0","X1",0)
+5
+^%M("%M0","X1",1)
+X1-X4 are loaded into variables X1-X4 and eXecuted to do the actual
+^%M("%M0","X1",2)
+   print.
+^%M("%M0","X1",3)
+Loop through routine index in ^%MU and prepare to print each of the
+^%M("%M0","X1",4)
+   flagged routines. Load the routine to be printed, calculate Size
+^%M("%M0","X1",5)
+   (SIZ), and initialize Page (P) number.
+^%M("%M0","X2",0)
+4
+^%M("%M0","X2",1)
+Loop thru the program loaded in the partition picking up each line
+^%M("%M0","X2",2)
+   in the variable X. If the 1st line or if at end of page, eXecute
+^%M("%M0","X2",3)
+   X4 for new page. EXecute X3 to print comments (if any) first, and then
+^%M("%M0","X2",4)
+   print the logical line on one or more physical lines.
+^%M("%M0","X3",0)
+1
+^%M("%M0","X3",1)
+If User wants comments, and they are defined in ^%M, print them.
+^%M("%M0","X4",0)
+1
+^%M("%M0","X4",1)
+Start new page and display heading.
+^%M("%M1","%M1",0)
+2
+^%M("%M1","%M1",1)
+         EDIT control for Routines and Globals
+^%M("%M1","%M1",2)
+ 
+^%M("%M1","EDIT",0)
+4
+^%M("%M1","EDIT",1)
+Reset $ZE, put the routine name in the scratch global, and then
+^%M("%M1","EDIT",2)
+   establish naked reference and default pointers (LP1 and LP2)
+^%M("%M1","EDIT",3)
+   and other misc. starting values in preparation for editing the
+^%M("%M1","EDIT",4)
+   routine.
+^%M("%M1","EDITA",0)
+12
+^%M("%M1","EDITA",1)
+Set display to HIGH intensity and then pass control to routine
+^%M("%M1","EDITA",2)
+   %ZEDT to do actual editing.
+^%M("%M1","EDITA",3)
+ 
+^%M("%M1","EDITA",4)
+On return, if the general keyboard variable A starts with a semicolon
+^%M("%M1","EDITA",5)
+   (;) it indicates that the user is entering a comment (rest of A
+^%M("%M1","EDITA",6)
+   contains label for which comment is to be added) so we set up to
+^%M("%M1","EDITA",7)
+   use the same editor (%ZEDT) by now pointing into the comment
+^%M("%M1","EDITA",8)
+   global %C indexed by the program name and label.
+^%M("%M1","EDITA",9)
+ 
+^%M("%M1","EDITA",10)
+Otherwise, see if user finished with a S_ave command. If so, save
+^%M("%M1","EDITA",11)
+   the routine and put the routine name in the routine directory
+^%M("%M1","EDITA",12)
+   in ^%MU.
+^%M("%M1","GEDIT",0)
+6
+^%M("%M1","GEDIT",1)
+GLOBAL EDIT -
+^%M("%M1","GEDIT",2)
+ 
+^%M("%M1","GEDIT",3)
+Switch to desired drive and then get the global reference that is to
+^%M("%M1","GEDIT",4)
+   be edited. The logic controling the global specification and scan
+^%M("%M1","GEDIT",5)
+   is almost identical to that define when listing globals so see the
+^%M("%M1","GEDIT",6)
+   comments under GLIST^%M0.
+^%M("%M1","GEDIT2",0)
+5
+^%M("%M1","GEDIT2",1)
+With the current reference (G1) and data node (G2), loop through
+^%M("%M1","GEDIT2",2)
+   asking for strings that are to be changed and what they are to
+^%M("%M1","GEDIT2",3)
+   be changed to. On each pass, the local data node value (in G2)
+^%M("%M1","GEDIT2",4)
+   is updated but the global reference (G1) is not updated until
+^%M("%M1","GEDIT2",5)
+   GEDIT4.
+^%M("%M1","GEDIT4",0)
+3
+^%M("%M1","GEDIT4",1)
+Display the change(s) and update the global reference. Then see if
+^%M("%M1","GEDIT4",2)
+   user want to work on this node AGAIN, CONTINUE to the next node,
+^%M("%M1","GEDIT4",3)
+   or STOP editing this global.
+^%M("%M1","READ",0)
+3
+^%M("%M1","READ",1)
+Standard keyboard read retuning exact read in A, upper-case of A
+^%M("%M1","READ",2)
+   in UA and the variable E set to false if read OK or True if
+^%M("%M1","READ",3)
+   question needs repeating (e.g. displayed Help text).
+^%M("%M1","REDIT",0)
+14
+^%M("%M1","REDIT",1)
+EDIT ROUTINES -
+^%M("%M1","REDIT",2)
+ 
+^%M("%M1","REDIT",3)
+Switch Drives to look at drive FDR, then get the name of the routine
+^%M("%M1","REDIT",4)
+   to be edited. All done if user enters "^", "X", or "".
+^%M("%M1","REDIT",5)
+If entry is "?L" or "?S", display routine directory and go back to
+^%M("%M1","REDIT",6)
+   name question.
+^%M("%M1","REDIT",7)
+If the User enters "*" or "RESTART", assume they want to enter the
+^%M("%M1","REDIT",8)
+   routine already in ^%MRE.
+^%M("%M1","REDIT",9)
+   NOTE - the scratch global used for editing (%MRE) is to be located
+^%M("%M1","REDIT",10)
+   on the SAME drive as the routine being edited !
+^%M("%M1","REDIT",11)
+ 
+^%M("%M1","REDIT",12)
+Otherwise, kill the scratch edit global (%MRE), and then setup $ZE
+^%M("%M1","REDIT",13)
+   to go to NEW if we get an error while trying to load the desired
+^%M("%M1","REDIT",14)
+   routine (routine dosen't exist on the indicated drive).
+^%M("%M1","REND",0)
+2
+^%M("%M1","REND",1)
+Switch back to default routine and global drives and go back to
+^%M("%M1","REND",2)
+   main options.
+^%M("%M1","UPPER",0)
+1
+^%M("%M1","UPPER",1)
+Convert string in A to upper-case returned in variable UA.
+^%M("%M1","XEQ",0)
+7
+^%M("%M1","XEQ",1)
+Load the named routine and move into the editing global %MRE.
+^%M("%M1","XEQ",2)
+ 
+^%M("%M1","XEQ",3)
+   NOTE - assumes that $ZE is set and ready to trap to label NEW
+^%M("%M1","XEQ",4)
+   if the routine dosen't exist. Also, creates an error on purpose at
+^%M("%M1","XEQ",5)
+   the end of the transfer to get back to EDIT%M1 so that we don't
+^%M("%M1","XEQ",6)
+   leave any loose ends (pending DO's etc.) since all NEW routines
+^%M("%M1","XEQ",7)
+   will automatically cause an error trap to NEW.
+^%M("%M2","%M2",0)
+7
+^%M("%M2","%M2",1)
+Programmer Utitlities - continuation from %M
+^%M("%M2","%M2",2)
+ 
+^%M("%M2","%M2",3)
+Process ROUTINE DELETE
+^%M("%M2","%M2",4)
+        GLOBAL DELETE
+^%M("%M2","%M2",5)
+        ROUTINE FIND
+^%M("%M2","%M2",6)
+        GLOBAL FIND
+^%M("%M2","%M2",7)
+ 
+^%M("%M2","FG1",0)
+6
+^%M("%M2","FG1",1)
+1st see if global namer also contains data (i.e. without subscripts),
+^%M("%M2","FG1",2)
+   if so, s D= data node and G contains reference - go check node
+^%M("%M2","FG1",3)
+   (via FG2).
+^%M("%M2","FG1",4)
+ 
+^%M("%M2","FG1",5)
+Then loop through the global and check (via FG2) each node for a possible
+^%M("%M2","FG1",6)
+   match.
+^%M("%M2","FG2",0)
+4
+^%M("%M2","FG2",1)
+Given the data node (defined in variable D), loop through the Find
+^%M("%M2","FG2",2)
+   specifications (in array F) and see if the data node matches any
+^%M("%M2","FG2",3)
+   of the specifications. If so, Do FG3 (write out the match to the
+^%M("%M2","FG2",4)
+   output device).
+^%M("%M2","FG3",0)
+2
+^%M("%M2","FG3",1)
+Had a HIT in the search, display the global reference (in G) and
+^%M("%M2","FG3",2)
+   then display the data on which we HIT (via  FG4).
+^%M("%M2","FIND",0)
+4
+^%M("%M2","FIND",1)
+Common section (both ROUTINES and GLOBALS) used to get find specifications
+^%M("%M2","FIND",2)
+   and control search for those specifications.
+^%M("%M2","FIND",3)
+ 
+^%M("%M2","FIND",4)
+Select indicated drive and setup to get Find Specifications.
+^%M("%M2","FIND1",0)
+1
+^%M("%M2","FIND1",1)
+Get a string or pattern match to search for.
+^%M("%M2","FIND2",0)
+3
+^%M("%M2","FIND2",1)
+Quit if no specifications made, otherwise Use the outpur device
+^%M("%M2","FIND2",2)
+   and dispatch control to do search depending on whether we are doing
+^%M("%M2","FIND2",3)
+   routines or globals.
+^%M("%M2","FINDG",0)
+1
+^%M("%M2","FINDG",1)
+Special section to control searching through globals.
+^%M("%M2","FINDR",0)
+6
+^%M("%M2","FINDR",1)
+Process ROUTINE finds.
+^%M("%M2","FINDR",2)
+ 
+^%M("%M2","FINDR",3)
+Load up the local variables X1-X4 from labels X1-X4 to do the actual
+^%M("%M2","FINDR",4)
+   search through the routines. The routines are loaded into the partition
+^%M("%M2","FINDR",5)
+   (that's why we eXecute the search out of variables) and then searched
+^%M("%M2","FINDR",6)
+   line by line for possible finds.
+^%M("%M2","GDEL",0)
+4
+^%M("%M2","GDEL",1)
+GLOBAL DELETE
+^%M("%M2","GDEL",2)
+ 
+^%M("%M2","GDEL",3)
+Setup for a global delete (Q is question label for HELP text), and then
+^%M("%M2","GDEL",4)
+   go to RDEL1 for common (with routines) delete section.
+^%M("%M2","GFIND",0)
+5
+^%M("%M2","GFIND",1)
+GLOBAL FIND
+^%M("%M2","GFIND",2)
+ 
+^%M("%M2","GFIND",3)
+Entry point for global searches. First get the global reference,
+^%M("%M2","GFIND",4)
+   setup for search, and then dispatch control to FIND to get Find 
+^%M("%M2","GFIND",5)
+   specifications and do the actual search.
+^%M("%M2","RDEL",0)
+4
+^%M("%M2","RDEL",1)
+ROUTINE DELETE
+^%M("%M2","RDEL",2)
+ 
+^%M("%M2","RDEL",3)
+Switch to selected drive and then get ready (i.e. set question Q
+^%M("%M2","RDEL",4)
+   to Routines) to DELETE routines.
+^%M("%M2","RDEL1",0)
+10
+^%M("%M2","RDEL1",1)
+This section is used for both ROUTINES and GLOBALS.
+^%M("%M2","RDEL1",2)
+ 
+^%M("%M2","RDEL1",3)
+First give User a chance to back out (or at least verify) that they
+^%M("%M2","RDEL1",4)
+   want to KILL. Ask for verification.
+^%M("%M2","RDEL1",5)
+ 
+^%M("%M2","RDEL1",6)
+If response is "?L" or "?S", display directory and re-ask question.
+^%M("%M2","RDEL1",7)
+ 
+^%M("%M2","RDEL1",8)
+Loop through ^%MU and eliminate the desired (flagged) routines or
+^%M("%M2","RDEL1",9)
+   globals. If working on routines, also delete the comments held in
+^%M("%M2","RDEL1",10)
+   ^%M.
+^%M("%M2","READ",0)
+1
+^%M("%M2","READ",1)
+Standard keyboard read.
+^%M("%M2","RFIND",0)
+5
+^%M("%M2","RFIND",1)
+ROUTINE FIND
+^%M("%M2","RFIND",2)
+ 
+^%M("%M2","RFIND",3)
+Setup to do Routine Find. First set Q for question (routines) and
+^%M("%M2","RFIND",4)
+   then go get strings to be found (via FIND). When done with FIND,
+^%M("%M2","RFIND",5)
+   Close output device (if not primary device) and Quit.
+^%M("%M2","UPPER",0)
+1
+^%M("%M2","UPPER",1)
+Convert string in A to upper-case, returned in UA.
+^%M("%M3","%M3",0)
+4
+^%M("%M3","%M3",1)
+Programmer Utilities - continuation from %M.
+^%M("%M3","%M3",2)
+ 
+^%M("%M3","%M3",3)
+Process ROUTINE CHANGE and
+^%M("%M3","%M3",4)
+        GLOBAL CHANGE  options.
+^%M("%M3","FROMTO",0)
+2
+^%M("%M3","FROMTO",1)
+Get list of strings to change FROm and what they should be replaced
+^%M("%M3","FROMTO",2)
+   by (TO). Results are left in the FROM and TO arrays.
+^%M("%M3","GC1",0)
+11
+^%M("%M3","GC1",1)
+Get the global reference to be changed. Looping through the global
+^%M("%M3","GC1",2)
+   will be controlled by how the reference was specified:
+^%M("%M3","GC1",3)
+ 
+^%M("%M3","GC1",4)
+   1. Global name ONLY (i.e. "^XXX" ) will cause the ENTIRE global
+^%M("%M3","GC1",5)
+      to be scanned for changes.
+^%M("%M3","GC1",6)
+   2. Full global reference (i.e. "^XXX(1,2)" ) will cause ONLY the
+^%M("%M3","GC1",7)
+      SPECIFIED node to be scanned/changed.
+^%M("%M3","GC1",8)
+   3. Partial reference (i.e. "^XYZ(1" ) will cause a scan of the
+^%M("%M3","GC1",9)
+      defined node and ALL nodes below that node.
+^%M("%M3","GC1",10)
+ 
+^%M("%M3","GC1",11)
+Loop through the FROM and TO array and display them for the user.
+^%M("%M3","GC2",0)
+6
+^%M("%M3","GC2",1)
+Get the reference and check for the obvious ("^", "?L" etc.). Then
+^%M("%M3","GC2",2)
+   setup variables for search through global.
+^%M("%M3","GC2",3)
+ 
+^%M("%M3","GC2",4)
+If the initial reference contains data, check it for changes.
+^%M("%M3","GC2",5)
+ 
+^%M("%M3","GC2",6)
+Then loop through global getting each node and checking for changes.
+^%M("%M3","GC3",0)
+5
+^%M("%M3","GC3",1)
+Have a data node in D with the reference in G. Check it against all
+^%M("%M3","GC3",2)
+   of the FROM/TO elements (in order they were entered). When done
+^%M("%M3","GC3",3)
+   variable MOD will be TRUE if changes and the variable Z will contain
+^%M("%M3","GC3",4)
+   the new data element (D holds the old one). If modified, write the
+^%M("%M3","GC3",5)
+   old and new lines out and update the global.
+^%M("%M3","GC35",0)
+4
+^%M("%M3","GC35",1)
+Write out the data node (in A) to selected device. Only write out
+^%M("%M3","GC35",2)
+   that which will fit on the line (designated by Y), and put remainder
+^%M("%M3","GC35",3)
+   on other lines (indenting in to start where the original data started
+^%M("%M3","GC35",4)
+   as reflected by X).
+^%M("%M3","GC4",0)
+4
+^%M("%M3","GC4",1)
+See if the current data node (Z) contains the FROM string. If so,
+^%M("%M3","GC4",2)
+   set the flag MOD to TRUE to indicate change, then loop through
+^%M("%M3","GC4",3)
+   string in Z making substitutions (building new line NL). When
+^%M("%M3","GC4",4)
+   done, leave updated string in Z.
+^%M("%M3","GC5",0)
+1
+^%M("%M3","GC5",1)
+Substitute TO for FROM building new data node in variable NL.
+^%M("%M3","GCEND",0)
+2
+^%M("%M3","GCEND",1)
+Clean up partition, close output device if not primary device,
+^%M("%M3","GCEND",2)
+   and switch back to default drives.
+^%M("%M3","GCHANGE",0)
+8
+^%M("%M3","GCHANGE",1)
+GLOBAL CHANGE
+^%M("%M3","GCHANGE",2)
+ 
+^%M("%M3","GCHANGE",3)
+   Switch to desired Drive and then get list of FROM and TO's (held in
+^%M("%M3","GCHANGE",4)
+local arrays FROM and TO). The basic operation of this section is to
+^%M("%M3","GCHANGE",5)
+get a global reference (one or many nodes), then loop through the specifed
+^%M("%M3","GCHANGE",6)
+references changing each FROM element to a TO element. When done with
+^%M("%M3","GCHANGE",7)
+the specified reference, loop back for another reference using the
+^%M("%M3","GCHANGE",8)
+SAME FROM and TO elements.
+^%M("%M3","RCHANGE",0)
+9
+^%M("%M3","RCHANGE",1)
+ROUTINE CHANGE
+^%M("%M3","RCHANGE",2)
+ 
+^%M("%M3","RCHANGE",3)
+   Switch to desired drive and then go get list of strings to change
+^%M("%M3","RCHANGE",4)
+FROM (held in FROM array), and list to be changed TO (in TO array).
+^%M("%M3","RCHANGE",5)
+ 
+^%M("%M3","RCHANGE",6)
+   Open output device then load up the local variables X1-X3 that
+^%M("%M3","RCHANGE",7)
+will be eXecuted to do actual routine searches and changes..
+^%M("%M3","RCHANGE",8)
+ 
+^%M("%M3","RCHANGE",9)
+   EXecute X1-X3 to load, check and modify routines.
+^%M("%M3","READ",0)
+1
+^%M("%M3","READ",1)
+Standard keyboard Read. 
+^%M("%M3","UPPER",0)
+1
+^%M("%M3","UPPER",1)
+Copnvert string in A to upper-case. Leave A untouched.
+^%M("%M3","X1",0)
+4
+^%M("%M3","X1",1)
+X1-X3 Are loaded into local variables X1-X3 and are eXecuted to loop
+^%M("%M3","X1",2)
+   through the routines flagged in ^%MU and then loop through each
+^%M("%M3","X1",3)
+   line of the routine making FROM-->TO changes from the FROM and TO
+^%M("%M3","X1",4)
+   arrays.
+^%M("%M4","%M4",0)
+11
+^%M("%M4","%M4",1)
+Programmer Utilities - continuation from %M
+^%M("%M4","%M4",2)
+ 
+^%M("%M4","%M4",3)
+Process ROUTINE SAVE
+^%M("%M4","%M4",4)
+        GLOBAL SAVE
+^%M("%M4","%M4",5)
+        ROUTINE RESTORE (with comments)
+^%M("%M4","%M4",6)
+        GLOBAL RESTORE
+^%M("%M4","%M4",7)
+ 
+^%M("%M4","%M4",8)
+ 
+^%M("%M4","%M4",9)
+If doing a RESTORE, go get the Description and the Date & Time node
+^%M("%M4","%M4",10)
+   from the restore file. $ZE is set to trap errors if there is no
+^%M("%M4","%M4",11)
+   file around.
+^%M("%M4","COM",0)
+1
+^%M("%M4","COM",1)
+Ask if User wants to SAVE/RESTORE comments with the routines.
+^%M("%M4","DATIM",0)
+1
+^%M("%M4","DATIM",1)
+If doing a SAVE, get free-text date & time.
+^%M("%M4","DESC",0)
+1
+^%M("%M4","DESC",1)
+If doing a SAVE, get free-text Description of file.
+^%M("%M4","DISPATCH",0)
+8
+^%M("%M4","DISPATCH",1)
+Select the desired Routine/Global drive and then dispatch control to
+^%M("%M4","DISPATCH",2)
+   the appropriate code:
+^%M("%M4","DISPATCH",3)
+ 
+^%M("%M4","DISPATCH",4)
+   RG - GLOBAL Restore
+^%M("%M4","DISPATCH",5)
+   SG - GLOBAL Save
+^%M("%M4","DISPATCH",6)
+   RR - Routine Restore
+^%M("%M4","DISPATCH",7)
+   SR - Routine Save
+^%M("%M4","DISPATCH",8)
+ 
+^%M("%M4","M41",0)
+2
+^%M("%M4","M41",1)
+Check to see if doing ROUTINES. If so, want to find out if User wants
+^%M("%M4","M41",2)
+   to do comments as well (either SAVE or RESTORE).
+^%M("%M4","M43",0)
+3
+^%M("%M4","M43",1)
+On GLOBAL SAVE, see if the user wants to limit the size of the output
+^%M("%M4","M43",2)
+   file. Useful in backing up a large global on multiple volumes. Default
+^%M("%M4","M43",3)
+   vale is about 10 Mbytes.
+^%M("%M4","READ",0)
+1
+^%M("%M4","READ",1)
+Standard keyboard read.
+^%M("%M4","READY",0)
+1
+^%M("%M4","READY",1)
+Display the Description, Date & Time for User verification.
+^%M("%M4","READY1",0)
+5
+^%M("%M4","READY1",1)
+After displaying Description and Date, ask if User ready. If so,
+^%M("%M4","READY1",2)
+   go to DISPATCH if RESTORE is going on. Otherwise, get ready to
+^%M("%M4","READY1",3)
+   output Description and Date & Time as headers to the file. Set
+^%M("%M4","READY1",4)
+   $ZE to trap if the file already exists. Otherwise go to DISPATCH
+^%M("%M4","READY1",5)
+   after writing headers.
+^%M("%M4","RX",0)
+17
+^%M("%M4","RX",1)
+Read a line from the specified input device. If NOT device 5 (reader
+^%M("%M4","RX",2)
+   punch, used to computer-to-computer transafers), simply read into
+^%M("%M4","RX",3)
+   th variable A.
+^%M("%M4","RX",4)
+If it is DEVICE 5, then there is some handshaking to be done. The
+^%M("%M4","RX",5)
+   program TRANSMITTING data must already be running on the other
+^%M("%M4","RX",6)
+   machine (it might be, or at least will look like Part TX below).
+^%M("%M4","RX",7)
+   It is waiting for a CR-LF (via READ) before sending each line.
+^%M("%M4","RX",8)
+ 
+^%M("%M4","RX",9)
+1. Send CR-LF and read line of data into A. If nothing coming down the
+^%M("%M4","RX",10)
+   line after 10 seconds, increment error count (N) and re-try if less
+^%M("%M4","RX",11)
+   than 10.
+^%M("%M4","RX",12)
+2. Send CR-LF to xmitter and read verification line (length of data line).
+^%M("%M4","RX",13)
+   If nothing in 10 seconds, increment error counter (N) and try again
+^%M("%M4","RX",14)
+   if count less than 10. Otherwise a Sync. error.
+^%M("%M4","RX",15)
+3. If the verification line (2.) is the same as the length of the data
+^%M("%M4","RX",16)
+   line, then OK. Send back to xmitter a final OK ("") or retry ("<~>")
+^%M("%M4","RX",17)
+   message. Loop back if not OK.
+^%M("%M4","TX",0)
+10
+^%M("%M4","TX",1)
+Write the data element in A out to the device in IO. If NOT Device 5
+^%M("%M4","TX",2)
+   (computer-to-computer link), simply write the data out. It it IS
+^%M("%M4","TX",3)
+   device 5 then:
+^%M("%M4","TX",4)
+ 
+^%M("%M4","TX",5)
+1. Wait til reciever running (wait via READ for CR-LF).
+^%M("%M4","TX",6)
+2. Write out the data line.
+^%M("%M4","TX",7)
+3. Wait til reciever ready for verify line (READ a CR-LF).
+^%M("%M4","TX",8)
+4. Write out a data verification line (length of data node).
+^%M("%M4","TX",9)
+5. Read a final OK from reciever (Last Read). If OK="" then data recieved
+^%M("%M4","TX",10)
+   alright and quit. Otherwise, error so re-transmit entire line.
+^%M("%M4","UPPER",0)
+1
+^%M("%M4","UPPER",1)
+Convert string in A to upper-case (returned in UA).
+^%M("%M5","%M5",0)
+14
+^%M("%M5","%M5",1)
+Extension of Programmer Utilities (%M) used to get Terminal options
+^%M("%M5","%M5",2)
+   and dispatch control.
+^%M("%M5","%M5",3)
+ 
+^%M("%M5","%M5",4)
+Option  Description
+^%M("%M5","%M5",5)
+  1     Used to DEFINE a terminal (i.e. its parameters such as screen
+^%M("%M5","%M5",6)
+        length/width, cursor positioning commands etc.).
+^%M("%M5","%M5",7)
+  2     Used to tie one of the terminals defined by option 1 to a 
+^%M("%M5","%M5",8)
+        particular port number (like 0 for Console, 1 for printer, etc).
+^%M("%M5","%M5",9)
+ 
+^%M("%M5","%M5",10)
+NOTE - after using option 2, we issue a D CURRENT^%MTC in case the
+^%M("%M5","%M5",11)
+   user changed the primary IO device (console).
+^%M("%M5","%M5",12)
+ 
+^%M("%M5","%M5",13)
+ALSO contains an extension to %M0 (FLAG3...) included here to keep %M
+^%M("%M5","%M5",14)
+   under 4,000 bytes.
+^%M("%M5","FLAG3",0)
+5
+^%M("%M5","FLAG3",1)
+Flag the Routines/Globals in ^%MU to indicate those that are to be
+^%M("%M5","FLAG3",2)
+   operated on. User can use the "*?" characters for a wild-card field
+^%M("%M5","FLAG3",3)
+   and can also indicate that they do NOT want ranges of names.
+^%M("%M5","FLAG3",4)
+NOTE that if RESTORING routines or globals, The specifications are
+^%M("%M5","FLAG3",5)
+   saved (^%MU("RESG" or "RESR",...)) and not the actual names.
+^%M("%M5","FLAGIT",0)
+2
+^%M("%M5","FLAGIT",1)
+Go through and flag as TRUE (1) all entities with the Name or, if
+^%M("%M5","FLAGIT",2)
+   NOT, flag as FALSE (0).
+^%M("%M6","DISPATCH",0)
+8
+^%M("%M6","DISPATCH",1)
+Select the desired Routine/Global drive and then dispatch control to
+^%M("%M6","DISPATCH",2)
+   the appropriate code:
+^%M("%M6","DISPATCH",3)
+ 
+^%M("%M6","DISPATCH",4)
+   RG - GLOBAL Restore
+^%M("%M6","DISPATCH",5)
+   SG - GLOBAL Save
+^%M("%M6","DISPATCH",6)
+   RR - Routine Restore
+^%M("%M6","DISPATCH",7)
+   SR - Routine Save
+^%M("%M6","DISPATCH",8)
+ 
+^%M("%M6","GS1",0)
+4
+^%M("%M6","GS1",1)
+First see if there is data at the name level. If so, write the reference
+^%M("%M6","GS1",2)
+   and data out. Otherwise, drop down and loop through the designated
+^%M("%M6","GS1",3)
+   global writing out the reference on one line and the data on the
+^%M("%M6","GS1",4)
+   next line.
+^%M("%M6","GS2",0)
+3
+^%M("%M6","GS2",1)
+If we have exceeded the number of bytes the user defined for the
+^%M("%M6","GS2",2)
+   OUTput file, close the current file and allow user to insert another
+^%M("%M6","GS2",3)
+   disk and specify a new filespecification to continue the global save.
+^%M("%M6","READ",0)
+1
+^%M("%M6","READ",1)
+Standard keyboard read.
+^%M("%M6","RG",0)
+13
+^%M("%M6","RG",1)
+                    GLOBAL RESTORE
+^%M("%M6","RG",2)
+ 
+^%M("%M6","RG",3)
+Setup and read through restore file picking up each pair of restore
+^%M("%M6","RG",4)
+   values (G is a global reference like "^ABC(1)", and D is the data that
+^%M("%M6","RG",5)
+   should be stored at that location (can be a null). Check to see if the
+^%M("%M6","RG",6)
+   name has changed (old name in OG). If not, set the reference to the
+^%M("%M6","RG",7)
+   data value.
+^%M("%M6","RG",8)
+ 
+^%M("%M6","RG",9)
+If the name has changed, set the new name (OG) and then check to see
+^%M("%M6","RG",10)
+   if this is one of the names to be restored (RG5). If so (GO=1), set
+^%M("%M6","RG",11)
+   this node (G and D) and loop back up.
+^%M("%M6","RG",12)
+If this name is NOT to be restored, loop through data entries until a
+^%M("%M6","RG",13)
+   another name is encountered.
+^%M("%M6","RG5",0)
+10
+^%M("%M6","RG5",1)
+We have a NEW global name (in OG like "^ABC") and now we have to
+^%M("%M6","RG5",2)
+   check and see if this global is to be restored. Loop through the
+^%M("%M6","RG5",3)
+   restore specifcations in ^%MU. Each specification consists of the
+^%M("%M6","RG5",4)
+   original user entry (like "'A2*") followed by ";", and then the
+^%M("%M6","RG5",5)
+   argument for an indirect IF used to test the name. Each name is checked
+^%M("%M6","RG5",6)
+   against ALL of the specifications, in the order they were entered,
+^%M("%M6","RG5",7)
+   since a name could be included in a general specification, later
+^%M("%M6","RG5",8)
+   eliminated from consideration (with a "'"), and still later included
+^%M("%M6","RG5",9)
+   again. When done, the flag GO will vbe TRUE or FALSE indicating whether
+^%M("%M6","RG5",10)
+   or not the name should be included.
+^%M("%M6","RR",0)
+8
+^%M("%M6","RR",1)
+                         ROUTINE RESTORE
+^%M("%M6","RR",2)
+ 
+^%M("%M6","RR",3)
+Restore Routines and [optionally] comments. First get a free sequential
+^%M("%M6","RR",4)
+   port (RO) so that we can save routines directly into a CP/M file
+^%M("%M6","RR",5)
+   with a ".MMP" extension. Then loop through and restore indicated
+^%M("%M6","RR",6)
+   routines and then loop through and restore comments for the indicated
+^%M("%M6","RR",7)
+   routines. NOTE that section GO is used to determine whether or not
+^%M("%M6","RR",8)
+   the routine name in R matches specifications in ^%MU(FDR.
+^%M("%M6","RX",0)
+17
+^%M("%M6","RX",1)
+Read a line from the specified input device. If NOT device 5 (reader
+^%M("%M6","RX",2)
+   punch, used to computer-to-computer transafers), simply read into
+^%M("%M6","RX",3)
+   th variable A.
+^%M("%M6","RX",4)
+If it is DEVICE 5, then there is some handshaking to be done. The
+^%M("%M6","RX",5)
+   program TRANSMITTING data must already be running on the other
+^%M("%M6","RX",6)
+   machine (it might be, or at least will look like Part TX below).
+^%M("%M6","RX",7)
+   It is waiting for a CR-LF (via READ) before sending each line.
+^%M("%M6","RX",8)
+ 
+^%M("%M6","RX",9)
+1. Send CR-LF and read line of data into A. If nothing coming down the
+^%M("%M6","RX",10)
+   line after 10 seconds, increment error count (N) and re-try if less
+^%M("%M6","RX",11)
+   than 10.
+^%M("%M6","RX",12)
+2. Send CR-LF to xmitter and read verification line (length of data line).
+^%M("%M6","RX",13)
+   If nothing in 10 seconds, increment error counter (N) and try again
+^%M("%M6","RX",14)
+   if count less than 10. Otherwise a Sync. error.
+^%M("%M6","RX",15)
+3. If the verification line (2.) is the same as the length of the data
+^%M("%M6","RX",16)
+   line, then OK. Send back to xmitter a final OK ("") or retry ("<~>")
+^%M("%M6","RX",17)
+   message. Loop back if not OK.
+^%M("%M6","SG",0)
+5
+^%M("%M6","SG",1)
+                   SAVE GLOBAL(s)
+^%M("%M6","SG",2)
+ 
+^%M("%M6","SG",3)
+Loop through the Global directory in ^%MU and pick out each global
+^%M("%M6","SG",4)
+   name that has been selected. Do part GS1 to write out each individual
+^%M("%M6","SG",5)
+   global.
+^%M("%M6","SR",0)
+5
+^%M("%M6","SR",1)
+                        ROUTINE SAVE
+^%M("%M6","SR",2)
+ 
+^%M("%M6","SR",3)
+Setup local variables X1-X3 that will be executed to do the actual
+^%M("%M6","SR",4)
+   save of the routines and comments. X1 controls saving of routines and
+^%M("%M6","SR",5)
+   X2-X3 control saving of comments.
+^%M("%M6","TX",0)
+10
+^%M("%M6","TX",1)
+Write the data element in A out to the device in IO. If NOT Device 5
+^%M("%M6","TX",2)
+   (computer-to-computer link), simply write the data out. It it IS
+^%M("%M6","TX",3)
+   device 5 then:
+^%M("%M6","TX",4)
+ 
+^%M("%M6","TX",5)
+1. Wait til reciever running (wait via READ for CR-LF).
+^%M("%M6","TX",6)
+2. Write out the data line.
+^%M("%M6","TX",7)
+3. Wait til reciever ready for verify line (READ a CR-LF).
+^%M("%M6","TX",8)
+4. Write out a data verification line (length of data node).
+^%M("%M6","TX",9)
+5. Read a final OK from reciever (Last Read). If OK="" then data recieved
+^%M("%M6","TX",10)
+   alright and quit. Otherwise, error so re-transmit entire line.
+^%M("%M6","UPPER",0)
+1
+^%M("%M6","UPPER",1)
+Convert string in A to upper-case (returned in UA).
+^%M("%M8","%M8",0)
+6
+^%M("%M8","%M8",1)
+If this is the FIRST time that the programmer utiltities have been
+^%M("%M8","%M8",2)
+   run and neither the default drives (^%MD) nor the basic terminal
+^%M("%M8","%M8",3)
+   definitions (^%MTC) have been defined, this routine will do so.
+^%M("%M8","%M8",4)
+ 
+^%M("%M8","%M8",5)
+The routine can be directly invoked at any time (D ^%M8) to change
+^%M("%M8","%M8",6)
+   the default routine and global drives.
+^%M("%MTC","%MTC",0)
+37
+^%M("%MTC","%MTC",1)
+Terminal Characteristics
+^%M("%MTC","%MTC",2)
+     John Lewkowicz - NYS Collge of Veterinary Medicine, Cornell University
+^%M("%MTC","%MTC",3)
+ 
+^%M("%MTC","%MTC",4)
+%MTC - Entry point to get a device number (asked if variable IO is NOT
+^%M("%MTC","%MTC",5)
+     defined) and then get and return the following variables defining the
+^%M("%MTC","%MTC",6)
+     terminal (NOTE, that if there is a startup string defined for the
+^%M("%MTC","%MTC",7)
+     requested device, it will be sent to that device before control is
+^%M("%MTC","%MTC",8)
+     to the User):
+^%M("%MTC","%MTC",9)
+ 
+^%M("%MTC","%MTC",10)
+     IOFF - character string necessary to clear screen or do Form Feed.
+^%M("%MTC","%MTC",11)
+     IOHL - character sequence to switch from HIGH to LOW intensity.
+^%M("%MTC","%MTC",12)
+     IOLH - character sequence to switch from LOW to HIGH intensity.
+^%M("%MTC","%MTC",13)
+     IORM - Right margin (in characters) (0-IORM characters/line).
+^%M("%MTC","%MTC",14)
+     IOSL - Screen Length in lines (0-IOSL lines/page).
+^%M("%MTC","%MTC",14.1)
+     IOST - Terminal SubType (like "C-ADM3A").
+^%M("%MTC","%MTC",15)
+     IOXY - character string necessary to position cursor to DX,DY.
+^%M("%MTC","%MTC",16)
+ 
+^%M("%MTC","%MTC",17)
+CURRENT - Entry point to get definition for "current" device (e.g. $I). It
+^%M("%MTC","%MTC",18)
+     returns to Caller after executing optional startup string with the
+^%M("%MTC","%MTC",19)
+     following variables:
+^%M("%MTC","%MTC",20)
+ 
+^%M("%MTC","%MTC",21)
+     FF - character string written to do form feed or clear screen
+^%M("%MTC","%MTC",22)
+          (W @FF).
+^%M("%MTC","%MTC",23)
+     HL - character sequence written to switch from HIGH intensity display
+^%M("%MTC","%MTC",24)
+          to LOW intensity display (W @HL).
+^%M("%MTC","%MTC",25)
+     LH - character sequence written to switch from LOW intensity to HIGH
+^%M("%MTC","%MTC",26)
+          intensity display (W @LH).
+^%M("%MTC","%MTC",27)
+     RM - Right Margin of screen (0-RM characters per line).
+^%M("%MTC","%MTC",28)
+     SL - Screen Length in lines (0-SL lines per page).
+^%M("%MTC","%MTC",28.1)
+     SUB- Terminal Subtype (like "C-ADM3A").
+^%M("%MTC","%MTC",29)
+     XY - Executable string to position cursor to position DX,DY.
+^%M("%MTC","%MTC",30)
+ 
+^%M("%MTC","%MTC",31)
+DEFINE - Entry point to Define a new terminal type. Allows creation or
+^%M("%MTC","%MTC",32)
+     modification of data for a selected terminal type including the values
+^%M("%MTC","%MTC",33)
+     for FF (IOFF), HL (IOHL), LH (IOLH), RM (IORM), SL (IOSL), XY (IOXY),
+^%M("%MTC","%MTC",34)
+     and a executable startup string.
+^%M("%MTC","%MTC",35)
+ 
+^%M("%MTC","%MTC",36)
+DEFAULT - Entry point to define default terminal for device numbers (e.g.
+^%M("%MTC","%MTC",37)
+     relate device #1 to a specific terminal type like an "LA-120").
+^%M("%MTC","CURRENT",0)
+5
+^%M("%MTC","CURRENT",1)
+Pick up the current device's ($I) parameters. If there is a startup
+^%M("%MTC","CURRENT",2)
+   string (will be in %X), then eXecute it. NOTE that the startup
+^%M("%MTC","CURRENT",3)
+   string CANNOT use any of the just terminal caracteristics variables
+^%M("%MTC","CURRENT",4)
+   (like LH) since we can't tell if the startup string will be issued
+^%M("%MTC","CURRENT",5)
+   via a call to %MTC or a call to CURRENT^%MTC (LH or IOLH).
+^%M("%MTC","DEFAULT",0)
+2
+^%M("%MTC","DEFAULT",1)
+Define the Terminal Names that are to be associated with specific
+^%M("%MTC","DEFAULT",2)
+   Device Numbers.
+^%M("%MTC","DEFINE",0)
+5
+^%M("%MTC","DEFINE",1)
+Define the characteristics for a spcific Terminal Name.
+^%M("%MTC","DEFINE",2)
+ 
+^%M("%MTC","DEFINE",3)
+Passes control to routine %MTCD - left here for those user programs that
+^%M("%MTC","DEFINE",4)
+   issue D DEFINE^%MTC. Both DEFINE and DEFAULT were moved to routine %MTCD
+^%M("%MTC","DEFINE",5)
+   to try to keep all routines down to 4Kbytes for portability.
+^%M("%MTC","IO10",0)
+7
+^%M("%MTC","IO10",1)
+Get the default device name for this number (^(^(IO))) and then loop thru
+^%M("%MTC","IO10",2)
+   and setup characteristics. Last parameter setup is %X which contains
+^%M("%MTC","IO10",3)
+   any startup commands for this device. If the startup command is null,
+^%M("%MTC","IO10",4)
+   then it is defaulted to a "O IO". If not, the command is eXecuted.
+^%M("%MTC","IO10",5)
+  
+^%M("%MTC","IO10",6)
+   NOTE - if a startup string is specified, it is the responsibility of
+^%M("%MTC","IO10",7)
+   the startup code to OPEN the device %IO (so that CURRENT^%MTC can do it too).
+^%M("%MTC","IOSDP",0)
+3
+^%M("%MTC","IOSDP",1)
+Startup code for SDP device to get the name of te file to be opened and
+^%M("%MTC","IOSDP",2)
+   the Drive on which it resides (or will reside). Variable %A1 contains
+^%M("%MTC","IOSDP",3)
+   the Drive (A, B, ...) and variable %A2 the file Name and Extension.
+^%M("%MTCD","DEFAULT",0)
+2
+^%M("%MTCD","DEFAULT",1)
+Define the Terminal Names that are to be associated with specific
+^%M("%MTCD","DEFAULT",2)
+   Device Numbers.
+^%M("%MTCD","DEFINE",0)
+1
+^%M("%MTCD","DEFINE",1)
+Define the characteristics for a spcific Terminal Name.
+^%M("%MTCD","DRV",0)
+1
+^%M("%MTCD","DRV",1)
+Standard question Driver.
+^%M("%MTCH","%MTCH",0)
+5
+^%M("%MTCH","%MTCH",1)
+Terminal Characteristics - HELP text for routine %MTC
+^%M("%MTCH","%MTCH",2)
+   John Lewkowicz - NYS College of Veterinary Medicine, Cornell University
+^%M("%MTCH","%MTCH",3)
+ 
+^%M("%MTCH","%MTCH",4)
+Routine to display question explanations in resonse to a User entry of
+^%M("%MTCH","%MTCH",5)
+   "?" or "??" in the terminal definition routine %MTC.
+
+*EOF*
+
+

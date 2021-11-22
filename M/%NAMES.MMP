@@ -1,0 +1,77 @@
+%NAMES ;SELECT A SET OF GLOBAL or ROUTINE NAMES
+ D ^%DIR G Y+1
+X S:'$D(%D) %D="R"
+Y D X^%DIR
+ K ^%U1 F %I=1:1:^%U(0) S ^%U1($P(^%U(%I)," ",1))=""
+ K ^%U S %DEL=0
+START R !!,"Option -- ",%OP G:%OP="" END I "?/ADD/A/DELETE/D/HELP/H/LIST/L/QUIT/Q"'[%OP_"/" W " ???" G START
+ I %OP="?" D HELP G START
+ I $E(%OP)="Q" G END
+ D @%OP G START
+END I %DEL S %X="" F I=1:1 S %X=$O(^%U(%X)) Q:%X=""  K:^%U(%X)="D" ^%U(%X)
+ W !! K ^%U1,%OP,%I,%DL,%D,%NM,%X,%N,%ST,%DEL
+ Q
+ ;
+GETNMS ;Gather up names
+ W !,"Enter the ",$S(%V=2:"global",%V=3:"routine",1:"file")," name: " W:%V=2 "^" R %NM Q:%NM=""
+ S %DL="?*",%X="",%N=0
+ Q:%NM'["?"&(%NM'["*")
+ F %I=1:1 D SCAND S:%ST'="" %X=%X_"1"""_%ST_"""" S:%N %X=%X_$S(%D="*":".",1:%N)_"E" Q:%NM=""
+ S %NM=%X Q
+ ;
+SCAND ;Return string before and after a set of delimeters
+ F %N=1:1:$L(%NM) S %D=$E(%NM,%N) I %DL[%D S %ST=$E(%NM,1,%N-1),%NM=$E(%NM,%N+1,999) Q
+ E  S %ST=%NM,%NM="",%N=0,%D="" Q
+ F %N=1:1 S %Y=$E(%NM) Q:%Y'=%D  S %NM=$E(%NM,2,999)
+ K %Y
+ Q
+	;
+A ;Add names to ^%U list
+ W "DD"
+ADD D GETNMS Q:%NM=""
+ I '%N S:$D(^%U1(%NM))!(%V=2&$D(^%U1($P(%NM,"(",1)))) ^%U(%NM)="" G ADD
+ S %X="" F %I=1:1 S %X=$O(^%U1(%X)) Q:%X=""  S:%X?@%NM ^%U(%X)=""
+ G ADD
+ ;
+D ;Delete names from ^%U list
+ W "ELETE"
+DELETE D GETNMS Q:%NM=""
+ I '%N S:$D(^%U1(%NM)) ^%U(%NM)="D",%DEL=1  G DELETE
+ S %X="" F %I=1:1 S %X=$O(^%U1(%X)) Q:%X=""  S:%X?@%NM ^%U(%X)="D"
+ S %DEL=1 G DELETE
+ ;
+L ;List names in ^%U list
+ W "IST"
+LIST W !! S %X="",%I=1
+ S %X=$O(^%U(%X)) Q:%X=""
+ I ^%U(%X)'="D" W ?%I-1#5*15,%X W:'(%I#5) ! S %I=%I+1
+ G LIST+1
+ Q
+ ;
+HELP ;List instructions
+H W !! F %I=1:1 S %X=$E($T(HP+%I),3,999) Q:%X=""  W %X,!
+ Q
+ ;
+HP ;INSTRUCTIONS
+ ;A or ADD        -- Add names to the list
+ ;D or DELETE     -- Delete names from the list
+ ;L or LIST       -- Show the names currently in the list
+ ;H or HELP       -- Typed instead of an option to get help
+ ;Q or QUIT       -- Exit %NAMES routine
+ ;?               -- Another way to get help
+ ;<RETURN>        -- Another way to exit
+ ; 
+ ; 
+ ;Instructions for entering names
+ ;  Enter either
+ ;   1.  A complete name
+ ;   2.  A name with 1 or more *'s in it
+ ;   3.  A name with 1 or more ?'s in it
+ ;   4.  A combination of 2 and 3
+ ;   5.  A <RETURN> to get the next option choice
+ ; 
+ ; Examples:
+ ;  MOM will only be the one name 'MOM'
+ ;  M*M will be any name starting with 'M' and ending with 'M'
+ ;  M?M will be any 3 letter name both starting and ending with 'M'
+

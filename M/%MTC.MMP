@@ -1,0 +1,21 @@
+%MTC ;JML NYSCVM
+ ;Define or Get terminal characteristics
+ I '$D(IO) W !,"Device: " W:$D(LH) @LH R IO W:$D(HL) @HL S:IO="" IO=0 Q:IO="^"
+ I IO?1N G IO10:$D(^%MTC(IO))
+ W !!,"Device NUMBER from the following list:",!
+ F %I=0:1 Q:'$D(^%MTC(%I))  W !,?5 W:$D(LH) @LH W %I W:$D(HL) @HL W "  ",$P("Console~Printer~SDP1~SDP2~SDP3~Comm.Port","~",%I+1) W:^(%I)'="" " ("_$P(^(^(%I)),"~",7)_")"
+ W ! K %I,IO G %MTC
+IO10 S %X=^(^(IO)) F %I=1:1:8 S @$P("IOFF~IOHL~IOLH~IORM~IOSL~IOXR~IOST~%X","~",%I)=$P(%X,"~",%I)
+ S %I=$I,%IO=IO S:%X="" %X="O IO" X %X U %I K %I,%X,%IO
+ Q
+IOSDP W !,"File Name (like A:TEST.EXT): " W:$D(LH) @LH R %A W:$D(HL) @HL
+ S %A1=$P(%A,":",1),%A2=$P(%A,":",2) I %A2="" S %A2=%A1,%A1=$S($D(^%MD):$E(^%MD,3),1:"A")
+ O IO:(%A1:%A2) K %A,%A1,%A2
+ Q
+CURRENT S %X=$S('$D(^%MTC($I)):"#~*0~*0~79~23~W *0~~",1:^(^($I)))
+ F %I=1:1:8 S @$P("FF~HL~LH~RM~SL~XY~SUB~%X","~",%I)=$P(%X,"~",%I)
+ S %IO=$I X %X K %I,%X,%IO
+ Q
+DEFINE G DEFINE^%MTCD
+DEFAULT G DEFAULT^%MTCD
+~HL~LH~RM~SL~XY~SUB~%X","~",%I)=$P(%X

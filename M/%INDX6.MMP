@@ -1,0 +1,27 @@
+%INDX6 ; REL - CONTINUE PRINT ; 04/01/81 12:28 PM ; ;8
+ G:NRO<2 END U IOP W !!,"--- CROSS-REFERENCING ALL ROUTINES ---" U IO
+ S RTN=0,ST="***" F I=1:1 S RTN=$N(^UTILITY($J,RTN)) Q:RTN=-1  F M="L","G","X" D CR0
+ K K,VZ W #!!,"*****   CROSS REFERENCE OF ALL ROUTINES   *****",! S RTN="***"
+ W !,"LOCAL VARIABLES",?21,"ROUTINES",! S M="L",SYM="" D P
+ W !!,"GLOBAL VARIABLES",! S M="G",SYM="^" D P
+ W !!,"ROUTINE",?21,"INVOKES:",! S M="Z",SYM="" D P
+ W !!,"ROUTINE",?21,"IS INVOKED BY:",! S M="X",SYM="" D P
+ W !!,"*****   END   *****",! G END
+P S L=-1,PC=0
+P1 S L=$N(^XCR($J,RTN,M,L)) I L=-1 W:'PC !?3,"NONE" Q
+ S PC=1 I M="X" W !?3,$P(L,"^",2),SYM,$P(L,"^",1),?16
+ E  W !?3,SYM,L,?16
+ F K=1:1 Q:'$D(^XCR($J,RTN,M,L,K))  S X=^XCR($J,RTN,M,L,K) D P2
+ G P1
+P2 F I=1:1 S ARG=$P(X,",",I) Q:ARG=""  W:IOM-10<$X !?16 W:$X'=16 "," W ARG ;IOM; JAS VMTH AUG82
+ Q
+CR0 S R=-1 I M="X" K VZ S KZ=1 I '$D(^XCR($J,ST,"X",RTN,1)) S ^XCR($J,ST,"X",RTN,1)=""
+CR1 S (R,S)=$N(^XCR($J,RTN,M,R)) Q:R=-1  S PC="",KM=1 I M'="X" S:^XCR($J,RTN,M,S)["(+)" PC="(+)" G CR2
+ S S=$P(S,"^",1) G:$D(VZ(S)) CR1 S VZ(S)="" I '$D(^XCR($J,ST,"Z",RTN,1)) S ^XCR($J,ST,"Z",RTN,1)=S_"," G CR2
+ I $L(^XCR($J,ST,"Z",RTN,KZ))>240 S KZ=KZ+1,^XCR($J,ST,"Z",RTN,KZ)=""
+ S ^(KZ)=^(KZ)_S_","
+CR2 I '$D(^XCR($J,ST,M,S,KM)) S ^XCR($J,ST,M,S,KM)=RTN_PC_"," G CR1
+ I $L(^XCR($J,ST,M,S,KM))>240 S KM=KM+1 G CR2
+ S ^(KM)=^(KM)_RTN_PC_"," G CR1
+END C:IO'=IOP IO U IOP K ^XCR($J),^UTILITY($J) W !!,"--- D O N E ---" Q
+

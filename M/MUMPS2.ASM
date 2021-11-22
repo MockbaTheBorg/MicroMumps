@@ -1,0 +1,21537 @@
+; ===========================================================================
+; UC Davis MicroMumps for CP/M - version 4.06
+; Rebuilt by Marcelo F. Dantas in February of 2014
+; marcelo.f.dantas@gmail.com
+; ===========================================================================
+;
+; ---------------------------------------------------------------------------
+; enum Chars
+BS               equ 8
+TAB              equ 9
+LF               equ 0Ah
+FF               equ 0Ch
+CR               equ 0Dh
+EOF              equ 1Ah                ; ^Z=SUB/EOF
+Blank            equ 20h                ; Space
+Exclamation      equ 21h
+Quotes           equ 22h                ; "
+Pound            equ 23h
+Dollar           equ 24h
+Percent          equ 25h
+LeftP            equ 28h
+RightP           equ 29h
+Asterisk         equ 2Ah
+Plus             equ 2Bh
+Comma            equ 2Ch
+Minus            equ 2Dh
+Point            equ 2Eh
+Slash            equ 2Fh
+Colon            equ 3Ah
+Semicolon        equ 3Bh
+Question         equ 3Fh
+LeftB            equ 5Bh
+Backslash        equ 5Ch
+Carat            equ 5Eh
+DEL              equ 7Fh
+; ---------------------------------------------------------------------------
+; enum BdosCalls
+ReaderIn         equ 3                  ; BDOS call 3
+PunchOut         equ 4                  ; BDOS call 4
+PrintOut         equ 5                  ; BDOS call 5
+ConsoleIO        equ 6                  ; BDOS call 6
+PrintString      equ 9                  ; BDOS call 9
+BufferIn         equ 0Ah                ; BDOS call 10
+ResetDisk        equ 0Dh                ; BDOS call 13
+OpenFile         equ 0Fh                ; BDOS call 15
+CloseFile        equ 10h                ; BDOS call 16
+SearchFirst      equ 11h                ; BDOS call 17
+DeleteFile       equ 13h                ; BDOS call 19
+ReadNext         equ 14h                ; BDOS call 20
+WriteNext        equ 15h                ; BDOS call 21
+MakeFile         equ 16h                ; BDOS call 22
+SetDMA           equ 1Ah                ; BDOS call 26
+ReadRandom       equ 21h                ; BDOS call 33
+FileSize         equ 23h                ; BDOS call 35
+; ---------------------------------------------------------------------------
+; enum BiosCalls
+ConSt            equ 3                  ; BIOS call 3
+ConIn            equ 6                  ; BIOS call 6
+ConOut           equ 9                  ; BIOS call 9
+LstOut           equ 0Ch                ; BIOS call 12
+HomeDsk          equ 15h                ; BIOS call 21
+; ---------------------------------------------------------------------------
+; enum Bool
+FALSE            equ 0
+TRUE             equ 1
+; ---------------------------------------------------------------------------
+; enum CPM
+BOOT             equ 0
+BDOS             equ 5
+Page0FCB         equ 5Ch
+Page0BUF         equ 80h
+; ---------------------------------------------------------------------------
+; enum Mumps
+STRNG            equ 1
+PTRLN            equ 2                  ; Size of a Pointer (2)
+NOTFL            equ 2
+TokenTable       equ 3                  ; Page number of the Token Table
+MulTable         equ 4                  ; Page number of the Multiplication Table
+DIRTY            equ 4
+INTLN            equ 5                  ; Size of an Integer (5)
+LBLLN            equ 8                  ; Max size of a label
+BRAKE            equ 8
+FLTLN            equ 0Eh                ; Size of a Float/BCD (14)
+Prompt           equ 3Eh                ; >
+; ---------------------------------------------------------------------------
+; enum Tokens
+tknLowercase     equ 1
+tknUppercase     equ 2
+tknNumber        equ 3
+tknQuote         equ 4
+tknPlus          equ 5
+tknMinus         equ 6
+tknAsterisk      equ 7
+tknPound         equ 9
+tknAmper         equ 0Bh
+tknExclamation   equ 0Ch
+tknGtrT          equ 0Eh
+tknEqual         equ 11h
+tknUnderscore    equ 12h
+tknPercent       equ 13h
+tknCarat         equ 14h
+tknComma         equ 15h
+tknColon         equ 16h
+tknQuotes        equ 17h
+tknAt            equ 18h
+tknLeftP         equ 19h
+tknRightP        equ 1Ah
+tknDollar        equ 1Bh
+tknPoint         equ 1Ch
+tknSemicolon     equ 1Dh
+tknQuestion      equ 1Eh
+tknBlank         equ 1Fh
+tknCurlR         equ 24h
+tknTAB           equ 25h
+tknCRLF          equ 26h
+tknInvalid       equ 32h
+
+; ---------------------------------------------------------------------------
+; Processor       : z80 []
+; Target assembler: ZMAC 1.3 by Bruce Norskog
+; ===========================================================================
+
+                org 100h
+                jp      Init
+; ---------------------------------------------------------------------------
+                db 0,0,0,0
+GlobalsDR       db 0                    ; Default drive for globals (0-F)
+RoutinesDR      db 0                    ; Default drive for routines (0-F)
+ClrScrSize      db 6                    ; Clear screen for ANSI/VT100
+ClrScr          db  1Bh, 5Bh, 48h, 1Bh, 5Bh, 4Ah,   0,   0
+                db    0,   0,   0,   0,   0,   0,   0,   0
+                db    0,   0,   0,   0,   0
+PartSize        dw 2000h                ; Default partition size
+ErrorsDR        db 0                    ; Drive for the errors file
+ErrorsFCB       db 0                    ; FCB for the errors file
+                db 'ERRORS  DAT'
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0
+GlobalsFCB      db 0                    ; FCB for the globals file
+                db 'GLOBALS DAT'
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0
+AutoexecFlag    db 0                    ; Runs a pre-defined command line when loading
+CmdLineSz       db 0                    ; Size of the command line
+D0Buffer        db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ; Device 0 (console) buffer
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+pTmp1           dw 0
+pTmp2           dw 0
+pTmp3           dw 0
+pTmp4           dw 0
+pTmp5           dw 0
+pTmp6           dw 0
+pTmp7           dw 0
+pTmp8           dw 0
+pTmp9           dw 0
+pTmp10          dw 0, 0, 0
+PtrX            dw 0
+PtrX1           dw 0
+PtrX2           dw 0
+                db 0,0,0,0,0,0,0,0
+word_0292       dw 0
+                db 0
+                db 0
+                db 0
+                db 0
+pName           dw 0
+word_029A       dw 0
+pIndex          dw 0
+                db 0
+pDevBufRead     db 0
+                db 0
+                db 0
+SetBs           dw 0
+word_02A4       dw 0
+                db 0
+                db 0
+pVar            dw 0                    ; Points to a var in the symbol table
+                db 0,0,0,0,0,0
+PTR             dw 0
+UnkWD01         dw 0                    ; Set but never read
+                db 0
+                db 0
+                db 0
+                db 0
+word_02B8       dw 0
+                db 0,0,0,0,0,0
+word_02C0       dw 0
+                db 0,0,0,0,0,0
+NSTOS           dw 0
+                dw 0
+word_02CC       dw 0
+                dw 0
+word_02D0       dw 0
+pDevFileName    dw 0
+pDevIsOpen      dw 0                    ; 0=Closed 1=Open
+pDevType        dw 0                    ; 1=R/O 2=R/W
+pDevDrive       dw 0
+pDevX           dw 0                    ; X position (BCD5)
+pDevY           dw 0                    ; Y position (BCD5)
+pDevEOF         dw 0
+pDevBuffer      dw 0
+pDevRead        dw 0
+pDevEOFtmp      dw 0
+pFRWBuffer      dw 0                    ; Pointer to file R/W buffer
+pGLBBuffer1     dw 0
+                dw 0
+pGLbBuffer2     dw 0
+pGLBBuffer3     dw 0
+                dw 0
+word_02F2       dw 0
+word_02F4       dw 0
+                dw 0
+word_02F8       dw 0
+word_02FA       dw 0
+                dw 0
+word_02FE       dw 0
+;
+                org TokenTable * 0100h ; Must be on a page boundary
+;
+; 1 - a-z   B - &    15 - ,    1F - Space Nbsp
+; 2 - A-Z   C - !    16 - :    20 - `
+; 3 - 0-9   D - <    17 - "    21 - |
+; 4 - '     E - >    18 - @    22 - ~
+; 5 - +     F - [    19 - (    23 - {
+; 6 - -    10 - ]    1A - )    24 - }
+; 7 - *    11 - =    1B - $    25 - Tab
+; 8 - /    12 - _    1C - .    26 - LF CR
+; 9 - #    13 - %    1D - ;    27 - FF
+; A - \    14 - ^    1E - ?    32 - Invalid
+;
+TokenTBL        db  32h, 32h, 32h, 32h, 32h, 32h, 32h, 32h
+                db  32h, 25h, 26h, 32h, 27h, 26h, 32h, 32h
+                db  32h, 32h, 32h, 32h, 32h, 32h, 32h, 32h
+                db  32h, 32h, 32h, 32h, 32h, 32h, 32h, 32h
+                db  1Fh, 0Ch, 17h,   9, 1Bh, 13h, 0Bh,   4
+                db  19h, 1Ah,   7,   5, 15h,   6, 1Ch,   8
+                db    3,   3,   3,   3,   3,   3,   3,   3
+                db    3,   3, 16h, 1Dh, 0Dh, 11h, 0Eh, 1Eh
+                db  18h,   2,   2,   2,   2,   2,   2,   2
+                db    2,   2,   2,   2,   2,   2,   2,   2
+                db    2,   2,   2,   2,   2,   2,   2,   2
+                db    2,   2,   2, 0Fh, 0Ah, 10h, 14h, 12h
+                db  20h,   1,   1,   1,   1,   1,   1,   1
+                db    1,   1,   1,   1,   1,   1,   1,   1
+                db    1,   1,   1,   1,   1,   1,   1,   1
+                db    1,   1,   1, 23h, 21h, 24h, 22h, 32h
+                db  32h, 32h, 32h, 32h, 32h, 32h, 32h, 32h
+                db  32h, 32h, 32h, 32h, 32h, 32h, 32h, 32h
+                db  32h, 32h, 32h, 32h, 32h, 32h, 32h, 32h
+                db  32h, 32h, 32h, 32h, 32h, 32h, 32h, 32h
+                db  1Fh, 2Ah, 2Ah, 2Ah, 2Ah, 2Ah, 29h, 2Bh
+                db  2Bh, 2Bh, 2Bh, 2Bh, 2Bh, 2Bh, 2Bh, 2Bh
+                db  2Ch, 29h, 29h, 29h, 29h, 29h, 29h, 29h
+                db  29h, 29h, 29h, 29h, 29h, 29h, 29h, 29h
+                db  29h, 29h, 29h, 29h, 29h, 29h, 29h, 29h
+                db  29h, 29h, 29h, 29h, 29h, 29h, 29h, 29h
+                db  29h, 29h, 29h, 29h, 29h, 29h, 29h, 29h
+                db  29h, 29h, 29h, 29h, 29h, 29h, 2Ch, 2Ch
+                db    0,   0,   0,   0,   0,   0,   0,   0
+                db    0,   0,   0,   0,   0,   0,   0,   0
+                db    0,   0,   0,   0,   0,   0,   0,   0
+                db    0,   0,   0,   0,   0,   0,   0,   0
+;
+                org MulTable * 0100h ; Must be on a page boundary
+;
+MulTBL          db    0,   0,   0,   0,   0,   0,   0,   0
+                db    0,   0,   0,   0,   0,   0,   0,   0
+                db    0,   1,   2,   3,   4,   5,   6,   7
+                db    8,   9,   0,   0,   0,   0,   0,   0
+                db    0,   2,   4,   6,   8, 10h, 12h, 14h
+                db  16h, 18h,   0,   0,   0,   0,   0,   0
+                db    0,   3,   6,   9, 12h, 15h, 18h, 21h
+                db  24h, 27h,   0,   0,   0,   0,   0,   0
+                db    0,   4,   8, 12h, 16h, 20h, 24h, 28h
+                db  32h, 36h,   0,   0,   0,   0,   0,   0
+                db    0,   5, 10h, 15h, 20h, 25h, 30h, 35h
+                db  40h, 45h,   0,   0,   0,   0,   0,   0
+                db    0,   6, 12h, 18h, 24h, 30h, 36h, 42h
+                db  48h, 54h,   0,   0,   0,   0,   0,   0
+                db    0,   7, 14h, 21h, 28h, 35h, 42h, 49h
+                db  56h, 63h,   0,   0,   0,   0,   0,   0
+                db    0,   8, 16h, 24h, 32h, 40h, 48h, 56h
+                db  64h, 72h,   0,   0,   0,   0,   0,   0
+                db    0,   9, 18h, 27h, 36h, 45h, 54h, 63h
+                db  72h, 81h
+TimeoutFL       db 0
+bIsGlbOpen      db 0
+                db 0
+                db 0
+                db 0
+STCnt           db 0
+NameLen         db 0                    ; Length of the current variable name
+StrLen          db 0                    ; Length of the current string (plus 1)
+tmpChar1        db 0
+                db 0
+Count           db 0
+WarmBoot        db 0
+SetFL           db 0
+SetSW           db 0
+DT              db 0
+ForFL           db 0
+DollarJ         db 0
+bFlagNext       db 0
+bFlagOrder      db 0
+DN              db 0
+GotoFL          db 0
+                db 0
+KillFL          db 0
+                db 0
+                db 0
+ReadFL          db 0
+INF             db 0
+ViewParam       db 0
+PF              db 0
+                db 0
+byte_04B8       db 0
+GLB             db 0
+IOTemp1         db 0
+IOTemp2         db 0
+I1              db 0
+I2              db 0
+I3              db 0
+I4              db 0
+I5              db 0
+I6              db 0
+                db 0
+byte_04C3       db 0
+II              db 0
+tmpChar2        db 0
+ITX             db 0
+N               db 0
+                db 0
+                db 0
+                db 0
+UnkFL01         db 0                    ; Set but never read
+SubFL           db 0                    ; Set if variable has subscripts
+                db 0
+UnkFL02         db 0                    ; Set but never read
+                db 0
+byte_04D0       db 0
+NR              db 0
+bmFlag1         db 0                    ; bit0:String
+                                        ; bit1:Not
+                                        ; bit2:Dirty
+                                        ; bit4:Break
+UnkFL03         db 0                    ; Set but never read
+                db 0,0,0,0,0
+Drive           db 0                    ; Current disk drive
+byte_04DA       db 0
+DeviceInUse     db 0
+                db 0
+FCBType         db 0                    ; 0:Global, 1:Routine, 2:File
+                db 0
+byte_04DF       db 0
+                db 0,0,0,0,0,0
+IXT             db 0
+byte_04E7       db 0
+I1X             db 0
+byte_04E9       db 0
+byte_04EA       db 0
+byte_04EB       db 0
+byte_04EC       db 0
+byte_04ED       db 0
+DecPlaces1      db 0
+DecPlaces2      db 0
+Signal1         db 0
+Signal2         db 0
+                db 0
+byte_04F3       db 0
+PrintTgl        db 0
+StopTgl         db 0
+NumOfParams     db 0
+Delete          db 0
+byte_04F8       db 0
+UnkFL04         db 0                    ; Set but never read
+                db 0
+                db 0
+                db 0
+byte_04FD       db 0
+                db 0
+byte_04FF       db 0
+Vptr            dw 0
+word_0502       dw 0
+word_0504       dw 0
+                db 0
+                db 0
+                db 0
+                db 0
+word_050A       dw 0
+word_050C       dw 0
+word_050E       dw 0
+word_0510       dw 0
+byte_0512       db 0
+GLBBlock        dw 0                    ; Current global file block
+byte_0515       db 0, 0, 0
+byte_0518       db 0, 0, 0
+byte_051B       db 0, 0, 0
+                db 0, 0, 0
+byte_0521       db 0, 0, 0
+byte_0524       db 0, 0, 0
+                db 0, 0, 0
+byte_052A       db 0, 0, 0
+byte_052D       db 0, 0, 0
+byte_0530       db 0, 0, 0
+byte_0533       db 0, 0, 0
+                db 0, 0, 0
+                db 0, 0, 0
+                db 0, 0, 0
+byte_053F       db 0, 0, 0
+glbptrUnk       db 0, 0, 0
+BytesToRead     db 0
+byte_0546       db 0
+byte_0547       db 0
+VariableFL      db 0                    ; 0 - Function : 1 - Variable
+byte_0549       db 0
+byte_054A       db 0
+; =============== S U B R O U T I N E =======================================
+; Startup initializations
+Start:
+                ld      hl, Stack       ; Gets the address of the stack starting point
+                ld      (pSymStack), hl ; Symbol stack
+                ld      de, 1000
+                add     hl, de          ; HL <- RandomSeed+1000
+                ld      (pTmp1), hl
+                ld      (pPlus1000), hl
+                ld      (hl), 43
+                inc     hl
+                ld      (pTmp1), hl
+                ld      de, 13
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pTmp1)
+                ld      de, 2
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      (word_A632), hl ; AA91
+                ex      de, hl
+                ld      hl, (pTmp1)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pTmp1)
+                ld      de, 2
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      hl, (word_A632)
+                ex      de, hl
+                ld      hl, (pTmp1)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pTmp1)
+                ld      de, 2
+                add     hl, de
+                ld      (hl), 71
+                inc     hl
+                ld      (pTmp1), hl
+                ld      (pIndex), hl
+                ld      (word_A634), hl
+                ld      de, Nil
+                call    sub_980E        ; AA96 <- Nil
+                ld      hl, (pTmp1)
+                ld      de, 3
+                add     hl, de
+                ld      (hl), 0
+                inc     hl
+                ld      (pTmp1), hl
+                ld      hl, (pIndex)
+                ex      de, hl
+                ld      hl, (pTmp1)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pTmp1)
+                ld      de, 2
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      hl, (pIndex)
+                ex      de, hl
+                ld      hl, (pTmp1)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pTmp1)
+                ld      de, 2
+                add     hl, de
+                ld      (hl), 43
+                inc     hl
+                ld      (pTmp1), hl
+                ld      hl, (PartSize)  ; Default partition size
+                ld      de, 23
+                add     hl, de
+                ld      (pIndex), hl
+                ex      de, hl
+                ld      hl, (pTmp1)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pTmp1)
+                ld      de, 2
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      (word_A626), hl
+                ld      (word_9F96), hl
+                ld      (pRtnName), hl  ; Pointer to the current routine name
+                ld      (hl), 0
+                ld      de, 11
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      hl, (word_A626)
+                ex      de, hl
+                ld      hl, (pTmp1)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pTmp1)
+                ld      de, 2
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      hl, (word_A626)
+                ex      de, hl
+                ld      hl, (pTmp1)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pTmp1)
+                ld      de, 2
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      (word_9F98), hl
+                ld      (word_9F9A), hl
+                ld      (pStartOfRtn), hl ; Pointer to the start of the loaded routine
+                ld      (pCurRtnLine), hl ; Pointer to current routine line
+                ld      (pEndOfRtn), hl ; Pointer to the end of the loaded routine
+                ld      (hl), 26
+                ld      de, (PartSize)  ; Default partition size
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      (pSymbolTbl), hl ; Pointer to the symbol table
+                ld      de, 0
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pTmp1)
+                ld      de, 2
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      (pEnd), hl
+                ld      de, 5
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pTmp1)
+                ld      de, 2
+                add     hl, de
+                ld      (hl), 0
+                inc     hl
+                ld      (hl), 1
+                inc     hl
+                ld      (hl), 255
+                inc     hl
+                ld      (hl), 43
+                inc     hl
+                ld      (pTmp1), hl
+                ld      (word_A628), hl
+                ld      (word_A62A), hl
+                ld      (hl), 45
+                inc     hl
+                ld      (pTmp1), hl
+                ld      de, 0
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pTmp1)
+                ld      de, 2
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      (pIndex), hl
+                ld      de, 4
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      de, 0
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pTmp1)
+                ld      de, 2
+                add     hl, de
+                ld      (hl), 45
+                inc     hl
+                ld      (hl), 43
+                inc     hl
+                ld      (pTmp1), hl
+                ex      de, hl
+                ld      hl, (pIndex)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pIndex)
+                ld      de, 2
+                add     hl, de
+                ld      (pIndex), hl
+                ld      hl, (pTmp1)
+                ex      de, hl
+                ld      hl, (pIndex)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pTmp1)
+                ld      (pIndex), hl
+                ld      (hl), 45
+                inc     hl
+                ld      (pTmp1), hl
+                ld      hl, (BDOS+1)    ; Gets BDOS address
+                ld      (bBDOSaddr), hl ; Address of the BDOS entry point
+                or      a
+                sbc     hl, de
+                jp      c, GameOver     ; Terminate execution
+                ld      hl, (bBDOSaddr) ; Address of the BDOS entry point
+                dec     hl
+                ld      (hl), 43
+                ld      de, (pIndex)
+                or      a
+                sbc     hl, de
+                ld      (bBDOSaddr), hl ; Address of the BDOS entry point
+                ex      de, hl
+                ld      hl, (pTmp1)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pTmp1)
+                ld      de, 2
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      hl, (word_A628)
+                ex      de, hl
+                ld      hl, (pTmp1)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pTmp1)
+                ld      de, 2
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      hl, (word_A628)
+                ex      de, hl
+                ld      hl, (pTmp1)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (bBDOSaddr) ; Address of the BDOS entry point
+                ld      de, 0F9DEh      ; 63966
+                add     hl, de
+                jp      nc, GameOver    ; Terminate execution
+                ld      hl, (pPlus1000)
+                ld      sp, hl
+                ld      ix, (pSymStack) ; Symbol stack
+                call    SSChk           ; Check for room on the syntax stack
+                xor     a
+                ld      (DeviceInUse), a
+                call    DevPrepare      ; Prepares current device for use
+                call    BGetChar        ; GetChar (BIOS call)
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, Greet
+                ld      a, (tmpChar1)
+                cp      3
+                jp      nz, Greet
+                xor     a
+                ld      (AutoexecFlag), a ; Runs a pre-defined command line when loading
+Greet:                                  ; Runs a pre-defined command line when loading
+                ld      a, (AutoexecFlag)
+                cp      1
+                jp      z, NoGreet
+                ld      hl, sGreet
+                call    putStr          ; Outputs 0x00 terminated string in (HL)
+                call    putCrLf         ; Outputs a CrLf
+NoGreet:
+                ld      hl, 0
+                ld      (Index), hl
+                ld      hl, 0
+                ld      (word_A624), hl
+                ld      hl, 0
+                ld      (SymCount), hl  ; Number of symbols defined
+                xor     a
+                ld      (bmFlag1), a    ; bit0:String
+                                        ; bit1:Not
+                                        ; bit2:Dirty
+                                        ; bit4:Break
+                ld      (bIsGlbOpen), a
+                ld      (UnkFL03), a    ; Set but never read
+                ld      (WarmBoot), a
+                ld      (BreakFL), a    ; 1=On Break
+; End of function Start
+; =============== S U B R O U T I N E =======================================
+; Prepare initial execution
+Main:
+                xor     a               ; Set A to 0
+                ld      (Result), a     ; Holds the result of called function
+                ld      (Case), a
+                ld      (bmActFL), a
+                ld      (Token), a
+                ld      (SetFL), a
+                ld      (IndFL), a      ; Indirection flag
+                ld      (IndSW), a
+                ld      (DoSW), a
+                ld      (ForSW), a
+                ld      (bmFlag), a
+                ld      (VariableFL), a ; 0 - Function : 1 - Variable
+                ld      a, 1
+                ld      (Mode), a
+                xor     a
+                ld      (IODevice), a   ; Current IO device
+                ld      a, 2
+                ld      (IfSW), a
+                xor     a
+                ld      (DollarJ), a
+                ld      (DN), a
+                ld      (PF), a
+                ld      (GLB), a
+                ld      (Auto), a
+                ld      (byte_0549), a
+                ld      (byte_A6A4), a
+                ld      (byte_A69F), a
+                ld      a, 255
+                ld      (BytesToRead), a
+                ld      a, 0
+                ld      (SetSW), a
+                ld      (GotoFL), a
+                ld      (byte_A610), a
+                ld      (byte_A6A1), a
+                ld      hl, 0
+                ld      (word_A049), hl
+MainLoop:                               ; Get line to execute
+                call    Input
+                ld      a, (Auto)
+                or      a
+                jp      z, MainLoop1
+                ld      a, 1
+                ld      (Auto), a
+MainLoop1:
+                xor     a
+                ld      (byte_04FF), a
+                ld      hl, AutoexecFlag ; Runs a pre-defined command line when loading
+                ld      a, (hl)
+                or      00000010b
+                ld      (hl), a
+                ld      a, (bmFlag)
+                cp      00000100b
+                jp      nz, MainLoop4
+                ld      a, 00000011b
+                ld      (bmFlag), a
+                ld      a, (IndSW)
+                or      a
+                jp      z, MainLoop2
+                call    sub_69DD
+                ret
+; ---------------------------------------------------------------------------
+MainLoop2:
+                ld      a, (DoSW)
+                or      a
+                jp      z, MainLoop3
+                call    sub_6612
+                ret
+; ---------------------------------------------------------------------------
+MainLoop3:
+                ld      a, 1
+                ld      (Mode), a
+                jp      MainLoop
+; ---------------------------------------------------------------------------
+MainLoop4:
+                ld      hl, bmActFL
+                ld      a, 11111101b
+                and     (hl)
+                ld      (hl), a
+                xor     a
+                ld      (ForSW), a
+                ld      hl, bmActFL
+                ld      a, 11111110b
+                and     (hl)
+                ld      (hl), a
+                xor     a
+                ld      (IndFL), a      ; Indirection flag
+MainLoop5:                              ; Execute command
+                ld      a, (Token)
+                cp      tknCRLF         ; Is it CR or LF?
+                jp      z, MainLoop9
+MainLoop6:
+                ld      a, (Token)
+                cp      tknSemicolon    ; Is it ';'?
+                jp      z, MainLoop9
+                ld      a, (Auto)
+                and     00000100b
+                jp      z, MainLoop7
+                ld      a, 1
+                ld      (Auto), a
+MainLoop7:
+                ld      hl, bmActFL
+                ld      a, 11111110b
+                and     (hl)
+                ld      (hl), a
+                xor     a
+                ld      (UnkFL01), a    ; Set but never read
+                ld      (bmFlag), a
+                ld      (word_A652), ix
+                call    sub_8506
+                call    BGetChar2       ; GetChar if A!=0x00 (BIOS call)
+                ld      a, (Auto)
+                and     00000001b
+                jp      z, MainLoop8
+                call    sub_55D2
+MainLoop8:
+                ld      a, (bmActFL)
+                and     00000010b
+                jp      nz, MainLoop9
+                ld      a, (bmFlag)
+                cp      1
+                jp      z, MainLoop6
+MainLoop9:                              ; GetChar if A!=0x00 (BIOS call)
+                call    BGetChar2
+                xor     a               ; Reset LinAct and ComAct
+                ld      (bmActFL), a
+                ld      a, (ForSW)
+                or      a
+                jp      z, MainLoop
+                ret
+; End of function Main
+; =============== S U B R O U T I N E =======================================
+; Get line to execute
+Input:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (GotoFL)
+                cp      1
+                jp      z, Input1
+                ld      a, (IndSW)
+                or      a
+                jp      nz, Input17
+                ld      a, (AutoexecFlag) ; Runs a pre-defined command line when loading
+                cp      1
+                jp      z, Input5
+                ld      a, (byte_04FF)
+                or      a
+                jp      nz, Input15
+Input1:
+                ld      a, (Mode)
+                or      a
+                jp      z, Input6
+                ld      a, (AutoexecFlag) ; Runs a pre-defined command line when loading
+                cp      3
+                jp      z, bcHalt2
+Input2:                                 ; Current IO device
+                ld      a, (IODevice)
+                or      a
+                jp      z, Input3
+                xor     a
+                ld      (DeviceInUse), a
+                call    DevPrepare      ; Prepares current device for use
+                ld      a, (DeviceInUse)
+                ld      (IODevice), a   ; Current IO device
+Input3:                                 ; Outputs a CrLf
+                call    putCrLf
+                ld      a, Prompt       ; Prints out the command prompt
+                call    putChar         ; Outputs the character on A to the console
+                ld      a, (WarmBoot)
+                cp      1
+                jp      z, Input4
+                call    RandomSeed      ; Generates the random seed
+                ld      a, 1
+                ld      (WarmBoot), a
+Input4:
+                call    sub_9998
+                call    putCrLf         ; Outputs a CrLf
+                ld      a, (CmdLineSz)  ; Size of the command line
+                or      a
+                jp      z, Input2
+                ld      hl, 0
+                ld      (word_A636), hl
+Input5:                                 ; Device 0 (console) buffer
+                ld      hl, D0Buffer
+                ld      (PTR), hl
+                dec     hl
+                ld      (Index), hl
+                call    CheckLS
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, Input13
+                call    LineInsert      ; Insert line ar PrgPT
+                jp      Input2
+; ---------------------------------------------------------------------------
+Input6:
+                ld      a, (byte_A691)
+                cp      1
+                jp      z, Input8
+Input7:
+                ld      hl, (pStkStart)
+                inc     hl
+                ld      (pStkStart), hl
+                ld      a, (hl)
+                cp      LF
+                jp      nz, Input7
+                inc     hl
+                ld      (pStkStart), hl
+                ld      a, (hl)
+                cp      EOF             ; ^Z=SUB/EOF
+                jp      z, Input16
+Input8:
+                ld      a, 0
+                ld      (byte_A691), a
+                ld      hl, (pStkStart)
+                ld      (Index), hl
+                ld      (pCurRtnLine), hl ; Pointer to current routine line
+                xor     a
+                ld      (tmpChar2), a
+Input9:
+                ld      hl, (Index)
+                ld      a, (hl)
+                cp      TAB
+                jp      z, Input10
+                ld      a, (hl)
+                cp      Blank           ; Space
+                jp      z, Input10
+                ld      a, (hl)
+                cp      CR
+                jp      z, Error00      ; Missing linestart character
+                inc     hl
+                ld      (Index), hl
+                ld      hl, tmpChar2
+                inc     (hl)
+                jp      Input9
+; ---------------------------------------------------------------------------
+Input10:
+                ld      hl, (Index)
+                inc     hl
+                ld      (Index), hl
+                ld      a, (hl)
+                cp      TAB
+                jp      z, Input10
+                ld      a, (hl)
+                cp      Blank           ; Space
+                jp      z, Input10
+                ld      a, (hl)
+                cp      CR
+                jp      z, Input7
+                ld      a, (tmpChar2)
+                or      a
+                jp      z, Input12
+                cp      BS
+                jp      c, Input11
+                ld      a, LBLLN        ; Max size of a label
+                ld      (tmpChar2), a
+Input11:                                ; Label where the error ocurred
+                ld      hl, errLabel
+                ld      a, (tmpChar2)
+                ld      (hl), a
+                inc     hl
+                ld      (pTmp1), hl
+                ld      de, (pTmp1)
+                ld      hl, (pStkStart)
+                call    CopyAup         ; Copy A bytes from (HL)->(DE) up
+                ld      de, errIndex    ; Offset from the label where the error ocurred
+                ld      hl, ibcdV0
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+                jp      Input15
+; ---------------------------------------------------------------------------
+Input12:                                ; Offset from the label where the error ocurred
+                ld      hl, errIndex
+                ld      c, INTLN        ; Size of an Integer (5)
+                call    IbcdHL          ; Increments by 1 the C bytes long BCD in (HL)
+                jp      Input15
+; ---------------------------------------------------------------------------
+Input13:                                ; X position (BCD5)
+                ld      hl, (pDevX)
+                ld      de, ibcdV0
+                call    CopyIntDEHL     ; Copy INTLN bytes from (DE) to (HL) ; SetI
+                ld      hl, (pDevY)     ; Y position (BCD5)
+                ld      c, INTLN        ; Size of an Integer (5)
+                call    IbcdHL          ; Increments by 1 the C bytes long BCD in (HL)
+                ld      c, INTLN        ; Size of an Integer (5)
+                call    IbcdHL          ; Increments by 1 the C bytes long BCD in (HL)
+                ld      a, (bmFlag)
+                or      a
+                jp      z, Input14
+                cp      7
+                jp      z, Input14
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (tmpChar2), a
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     ix, bc
+                call    SSChk           ; Check for room on the syntax stack
+Input14:                                ; Size of the command line
+                ld      a, (CmdLineSz)
+                cp      255
+                jp      z, Error11      ; String too long
+                ld      hl, CmdLineSz   ; Size of the command line
+                inc     (hl)
+                ld      (pStkStart), ix
+                ld      hl, (pStkStart)
+                ld      (Index), hl
+                ld      hl, (PTR)
+                ld      a, (CmdLineSz)  ; Size of the command line
+                call    PushAnoZ        ; Pushes A long value from (HL) if A not zero
+                ld      (PTR), hl
+                ld      a, (CmdLineSz)  ; Size of the command line
+                ld      (ix+0), a
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+Input15:
+                ld      hl, (Index)
+                dec     hl
+                ld      (Index), hl
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                ret
+; ---------------------------------------------------------------------------
+Input16:
+                ld      hl, (pStkStart)
+                ld      (pCurRtnLine), hl ; Pointer to current routine line
+Input17:
+                ld      a, 4
+                ld      (bmFlag), a
+                ret
+; End of function Input
+; =============== S U B R O U T I N E =======================================
+; Entry point of BREAK command
+ecBreak:
+                call    PostCond        ; Command postconditional and delimiter
+                ld      a, (Case)
+                cp      4
+                jp      z, ecBreak3
+                cp      1
+                jp      nz, ecBreak2
+ecBreak1:                               ; String-Value expression
+                call    StrExp
+                ld      a, 1
+                ld      (Case), a
+ecBreak2:
+                ld      a, (bmActFL)
+                or      a
+                call    z, bcBreak      ; Body of BREAK command
+ecBreak3:                               ; Command argument ending
+                call    ComArgEnd
+                ld      a, (Result)     ; Holds the result of called function
+                or      a
+                jp      z, ecBreak1
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000001b
+                ld      (hl), a
+                ret
+; End of function ecBreak
+; =============== S U B R O U T I N E =======================================
+; Entry point of CLOSE command
+ecClose:
+                call    PostCond        ; Command postconditional and delimiter
+                ld      a, (Case)
+                cp      4
+                jp      z, ecClose3
+                cp      1
+                jp      nz, Error14     ; Illegal command terminator
+ecClose1:                               ; Expression
+                call    Expr
+                ld      a, (bmActFL)
+                or      a
+                call    z, DevNtoShort  ; Converts device # to short
+                ld      a, (Token)
+                cp      tknColon        ; Is it ':'?
+                jp      nz, ecClose2
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                call    DevParam        ; Device parameters
+ecClose2:
+                ld      a, (bmActFL)
+                or      a
+                call    z, bcClose      ; Body of CLOSE command
+ecClose3:                               ; Command argument ending
+                call    ComArgEnd
+                ld      a, (Result)     ; Holds the result of called function
+                or      a
+                jp      z, ecClose1
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000001b
+                ld      (hl), a
+                ret
+; End of function ecClose
+; =============== S U B R O U T I N E =======================================
+; Entry point of DO command
+ecDo:
+                call    PostCond        ; Command postconditional and delimiter
+                ld      a, (Case)
+                cp      4
+                jp      z, ecDo2
+                cp      1
+                jp      nz, Error14     ; Illegal command terminator
+ecDo1:                                  ; Check for DO-able branch point
+                call    Trans
+                ld      a, (Case)
+                or      a
+                jp      z, ecDo2
+                ld      a, (bmActFL)    ; Stack DO information; do transpt
+                or      a
+                call    z, bcDo         ; Body of DO command
+ecDo2:                                  ; Command argument ending
+                call    ComArgEnd
+                ld      a, (Result)     ; Holds the result of called function
+                or      a
+                jp      z, ecDo1
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000001b
+                ld      (hl), a
+                ret
+; End of function ecDo
+; =============== S U B R O U T I N E =======================================
+; Entry point of ELSE command
+ecElse:
+                call    PostCond1
+                ld      a, (Case)
+                cp      2
+                jp      z, ecElse1
+                cp      3
+                jp      nz, Error14     ; Illegal command terminator
+                ld      a, (bmActFL)
+                or      a
+                call    z, bcElse       ; Body of ELSE command
+ecElse1:
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000001b
+                ld      (hl), a
+                ret
+; End of function ecElse
+; =============== S U B R O U T I N E =======================================
+; Entry point of FOR command
+ecFor:
+                ld      a, (Token)
+                cp      tknBlank        ; Is it ' '?
+                jp      nz, Error14     ; Illegal command terminator
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                call    LVarName        ; Check for local variable name
+                ld      a, (Result)     ; Holds the result of called function
+                or      a
+                jp      z, Error23      ; Illegal variable name
+                ld      (Vptr), ix
+                ld      a, (bmActFL)
+                or      a
+                call    z, ScanBOS      ; Scan for B-O-S
+                ld      a, (Token)
+                cp      tknEqual        ; Is it '='?
+                jp      nz, Error27     ; Missing equal sign
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+ecFor1:                                 ; Expression
+                call    Expr
+                ld      a, (Token)
+                cp      tknColon        ; Is it ':'?
+                jp      z, ecFor2
+                ld      a, (bmActFL)
+                or      a
+                call    z, AC51         ; Set value in for
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_430C
+                jp      ecFor6
+; ---------------------------------------------------------------------------
+ecFor2:                                 ; Loads to (Token) the token code of char (++pStkPos)
+                call    GToken
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_41F6
+                ld      (word_02FE), ix
+                call    NumExp          ; Numeric-Value expression
+                ld      a, (Token)
+                cp      tknColon        ; Is it ':'?
+                jp      z, ecFor4
+                ld      a, 1
+                ld      (byte_04F3), a
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_4DB3
+ecFor3:
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_430C
+                ld      a, 4
+                ld      (Case), a
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_4380
+                ld      a, (Case)
+                cp      4
+                jp      z, ecFor6
+                jp      ecFor3
+; ---------------------------------------------------------------------------
+ecFor4:                                 ; Loads to (Token) the token code of char (++pStkPos)
+                call    GToken
+                ld      (word_02F8), ix
+                call    NumExp          ; Numeric-Value expression
+                ld      a, 2
+                ld      (byte_04F3), a
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_4DB3
+                ld      a, 4
+                ld      (Case), a
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_463E
+                ld      a, (Case)
+                cp      1
+                jp      nz, ecFor6
+ecFor5:
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_430C
+                ld      a, 4
+                ld      (Case), a
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_46E2
+                ld      a, (Case)
+                cp      1
+                jp      z, ecFor5
+ecFor6:
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_47DD
+                ld      a, (Token)
+                cp      tknComma        ; Is it ','?
+                jp      nz, ecFor7
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                jp      ecFor1
+; ---------------------------------------------------------------------------
+ecFor7:
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_4839
+                call    ComArgEnd3
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000001b
+                ld      (hl), a
+                ret
+; End of function ecFor
+; =============== S U B R O U T I N E =======================================
+; Entry point of GOTO command
+ecGoto:
+                call    PostCond        ; Command postconditional and delimiter
+                ld      a, (Case)
+                cp      4
+                jp      z, ecGoto2
+                cp      1
+                jp      nz, Error14     ; Illegal command terminator
+ecGoto1:                                ; Transfer point primitive
+                call    Trans
+                ld      a, (Case)
+                or      a
+                jp      z, ecGoto2
+                ld      a, (bmActFL)
+                or      a
+                call    z, bcGoto       ; Body of GOTO command
+ecGoto2:                                ; Command argument ending
+                call    ComArgEnd
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, ecGoto1
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000001b
+                ld      (hl), a
+                ret
+; End of function ecGoto
+; =============== S U B R O U T I N E =======================================
+; Entry point of HALT command
+ecHalt:
+                call    PostCond        ; Command postconditional and delimiter
+                ld      a, (Case)
+                cp      2
+                jp      z, ecHalt1
+                cp      3
+                jp      nz, Error14     ; Illegal command terminator
+ecHalt1:
+                ld      a, (bmActFL)
+                or      a
+                call    z, bcHalt
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000001b
+                ld      (hl), a
+                ret
+; End of function ecHalt
+; =============== S U B R O U T I N E =======================================
+; Entry point of HANG command
+ecHang:
+                call    PostCond        ; Command postconditional and delimiter
+ecHang1:
+                ld      a, (Case)
+                cp      4
+                jp      z, ecHang3
+                cp      1
+                jp      nz, Error14     ; Illegal command terminator
+ecHang2:                                ; Integer-Value expression
+                call    IntExp
+                ld      a, (bmActFL)
+                or      a
+                call    z, bcHang       ; Body of HANG command
+ecHang3:                                ; Command argument ending
+                call    ComArgEnd
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, ecHang2
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000001b
+                ld      (hl), a
+                ret
+; End of function ecHang
+; =============== S U B R O U T I N E =======================================
+; Entry point of IF command
+ecIf:
+                call    PostCond1
+                ld      a, (Case)
+                cp      2
+                jp      z, ecIf3
+                cp      4
+                jp      z, ecIf2
+                cp      1
+                jp      z, ecIf1
+                ld      a, (bmActFL)
+                or      a
+                call    z, bcIf         ; Body of IF command
+                jp      ecIf3
+; ---------------------------------------------------------------------------
+ecIf1:                                  ; Truth-Value expression
+                call    TVExp
+                ld      a, (bmActFL)
+                or      a
+                call    z, CaseToIfSW   ; Move the contents of (case) to (ifsw)
+                ld      a, (Case)
+                cp      1
+                jp      z, ecIf2
+                ld      a, (bmActFL)
+                or      a
+                call    z, SetAFb1      ; Sets bit 1 of bmActFlag
+ecIf2:                                  ; Command argument ending
+                call    ComArgEnd
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, ecIf1
+ecIf3:
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000001b
+                ld      (hl), a
+                ret
+; End of function ecIf
+; =============== S U B R O U T I N E =======================================
+; Entry point of KILL comand
+ecKill:
+                call    PostCond        ; Command postconditional and delimiter
+                ld      a, (Case)
+                cp      4
+                jp      z, ecKill6
+                cp      1
+                jp      z, ecKill1
+                ld      a, (bmActFL)
+                or      a
+                call    z, KillAll      ; Clears the symbol table
+                jp      ecKill7
+; ---------------------------------------------------------------------------
+ecKill1:
+                ld      a, (Token)
+                cp      tknLeftP        ; Is it '('?
+                jp      nz, ecKill5
+                xor     a
+                ld      (KillFL), a
+ecKill2:                                ; Loads to (Token) the token code of char (++pStkPos)
+                call    GToken
+                call    LVarName        ; Check for local variable name
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, ecKill3
+                ld      a, (bmActFL)
+                or      a
+                call    z, AC76         ; Unmark symbol table after exclusive kill
+                jp      Error23         ; Illegal variable name
+; ---------------------------------------------------------------------------
+ecKill3:
+                ld      a, (bmActFL)
+                or      a
+                call    z, AC62         ; Mark for exclusive kill
+                ld      a, (Token)
+                cp      tknComma        ; Is it ','?
+                jp      z, ecKill2
+                cp      tknRightP       ; Is it ')'?
+                jp      z, ecKill4
+                ld      a, (bmActFL)
+                or      a
+                call    z, AC76         ; Unmark symbol table after exclusive kill
+                jp      Error12         ; Unmatched parentheses
+; ---------------------------------------------------------------------------
+ecKill4:                                ; Loads to (Token) the token code of char (++pStkPos)
+                call    GToken
+                ld      a, (bmActFL)
+                or      a
+                call    z, AC63         ; Kill exclusive of marked variables
+                jp      ecKill6
+; ---------------------------------------------------------------------------
+ecKill5:                                ; Global/Local variable name
+                call    GLVarName
+                ld      a, (bmActFL)
+                or      a
+                call    z, AC64         ; Kill variable + descendents
+ecKill6:                                ; Command argument ending
+                call    ComArgEnd
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, ecKill1
+ecKill7:
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000001b
+                ld      (hl), a
+                ret
+; End of function ecKill
+; =============== S U B R O U T I N E =======================================
+; Entry point of LOCK command
+ecLock:
+                call    PostCond        ; Command postconditional and delimiter
+                ld      a, 1
+                ld      (Locks), a
+                ld      a, (Case)
+                cp      4
+                jp      z, ecLock2
+                cp      1
+                jp      z, ecLock1
+                ld      a, (bmActFL)
+                or      a
+                call    z, AC102        ; Do nothing
+                jp      ecLock3
+; ---------------------------------------------------------------------------
+ecLock1:                                ; Variable/List primitive
+                call    VarList
+                call    DoTimeout       ; Does a timeout after a command
+                ld      a, (bmActFL)
+                or      a
+                call    z, AC101        ; Dummy routine to fix STABK for Lock
+ecLock2:                                ; Command argument ending
+                call    ComArgEnd
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, ecLock1
+ecLock3:
+                xor     a
+                ld      (Locks), a
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000001b
+                ld      (hl), a
+                ret
+; End of function ecLock
+; =============== S U B R O U T I N E =======================================
+; Entry point of OPEN command
+ecOpen:
+                call    PostCond        ; Command postconditional and delimiter
+                ld      a, (Case)
+                cp      4
+                jp      z, ecOpen3
+                cp      1
+                jp      nz, Error14     ; Illegal command terminator
+ecOpen1:                                ; Expression
+                call    Expr
+                ld      a, (bmActFL)
+                or      a
+                call    z, DevNtoShort  ; Converts device # to short
+                ld      a, (Token)
+                cp      tknColon        ; Is it ':'?
+                jp      nz, ecOpen2
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                call    DoTimeout       ; Does a timeout after a command
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, ecOpen2
+                call    DevParam        ; Device parameters
+                call    DoTimeout       ; Does a timeout after a command
+ecOpen2:
+                ld      a, (bmActFL)
+                or      a
+                call    z, bcOpen
+ecOpen3:                                ; Command argument ending
+                call    ComArgEnd
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, ecOpen1
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000001b
+                ld      (hl), a
+                ret
+; End of function ecOpen
+; =============== S U B R O U T I N E =======================================
+; Entry point of QUIT command
+ecQuit:
+                call    PostCond        ; Command postconditional and delimiter
+                ld      a, (Case)
+                cp      2
+                jp      z, ecQuit1
+                cp      3
+                jp      nz, Error14     ; Illegal command terminator
+ecQuit1:
+                ld      a, (bmActFL)
+                or      a
+                call    z, bcQuit       ; Body of QUIT command
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000001b
+                ld      (hl), a
+                ret
+; End of function ecQuit
+; =============== S U B R O U T I N E =======================================
+; Entry point of READ command
+ecRead:
+                call    PostCond        ; Command postconditional and delimiter
+                ld      a, (Case)
+                cp      4
+                jp      z, ecRead6
+                cp      1
+                jp      nz, Error14     ; Illegal command terminator
+ecRead2:
+                ld      a, (Token)
+                cp      tknAsterisk     ; Is it '*'?
+                jp      nz, ecRead3
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                call    LVarName        ; Check for local variable name
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, Error23     ; Illegal variable name
+                xor     a
+                ld      (TimeoutFL), a
+                call    DoTimeout       ; Does a timeout after a command
+                ld      a, (bmActFL)
+                or      a
+                call    z, ReadChar     ; Reads a variable in the format *V
+                jp      ecRead6
+; ---------------------------------------------------------------------------
+ecRead3:                                ; Checks if needed to output !, # or ?x
+                call    ChkCRLFSP
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, ecRead6
+                call    StrLit          ; Check for string literal
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, ecRead4
+                ld      a, (bmActFL)
+                or      a
+                call    z, PreRead      ; Handles the writes needed prior to read
+                jp      ecRead6
+; ---------------------------------------------------------------------------
+ecRead4:                                ; Check for local variable name
+                call    LVarName
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, Error18     ; Illegal character
+                ld      a, (Token)
+                cp      tknPound        ; Is it '#'?
+                jp      nz, ecRead5
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                call    IntExp          ; Integer-Value expression
+                ld      a, (bmActFL)
+                or      a
+                call    z, NumToRead    ; Obtains the number of characters to read
+ecRead5:
+                ld      a, 1
+                ld      (TimeoutFL), a
+                call    DoTimeout       ; Does a timeout after a command
+                ld      a, (bmActFL)
+                or      a
+                call    z, ReadVar      ; Reads a variable
+ecRead6:                                ; Command argument ending
+                call    ComArgEnd
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, ecRead2
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000001b
+                ld      (hl), a
+                ret
+; End of function ecRead
+; =============== S U B R O U T I N E =======================================
+; Entry point of SET command
+ecSet:
+                call    PostCond        ; Command postconditional and delimiter
+                ld      a, (Case)
+                cp      4
+                jp      z, ecSet3
+                cp      1
+                jp      nz, Error14     ; Illegal command terminator
+ecSet1:                                 ; Check for (settable) function name
+                call    CkFunction
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, ecSet2
+                call    VarList         ; Variable/List primitive
+ecSet2:
+                ld      a, (Token)
+                cp      tknEqual        ; Is it '='?
+                jp      nz, Error27     ; Missing equal sign
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                call    Expr            ; Expression
+                ld      a, (bmActFL)
+                or      a
+                call    z, AC47         ; Set values
+ecSet3:                                 ; Command argument ending
+                call    ComArgEnd
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, ecSet1
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000001b
+                ld      (hl), a
+                ret
+; End of function ecSet
+; =============== S U B R O U T I N E =======================================
+; Entry point of USE command
+ecUse:
+                call    PostCond        ; Command postconditional and delimiter
+                ld      a, (Case)
+                cp      4
+                jp      z, ecUse4
+                cp      1
+                jp      nz, Error14     ; Illegal command terminator
+ecUse2:                                 ; Expression
+                call    Expr
+                ld      a, (bmActFL)
+                or      a
+                call    z, DevNtoShort  ; Converts device # to short
+                ld      a, (Token)
+                cp      tknColon        ; Is it ':'?
+                jp      nz, ecUse3
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                call    DevParam        ; Device parameters
+ecUse3:
+                ld      a, (bmActFL)
+                or      a
+                call    z, AC65         ; Make device current
+ecUse4:                                 ; Command argument ending
+                call    ComArgEnd
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, ecUse2
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      01h
+                ld      (hl), a
+                ret
+; End of function ecUse
+; =============== S U B R O U T I N E =======================================
+; Entry point of VIEW command
+ecView:
+                call    PostCond        ; Command postconditional and delimiter
+                ld      a, (Case)
+                cp      4
+                jp      z, ecView3
+                cp      1
+                jp      z, ecView2
+ecView1:
+                xor     a
+                ld      (ViewParam), a
+                ld      a, (bmActFL)
+                or      a
+                call    z, ShowVars     ; View a list of local vars
+                jp      ecView4
+; ---------------------------------------------------------------------------
+ecView2:                                ; Integer-Value expression
+                call    IntExp
+                ld      a, (bmActFL)
+                or      a
+                call    z, bcView       ; Body of VIEW command
+ecView3:                                ; Command argument ending
+                call    ComArgEnd
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, ecView2
+ecView4:
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000001b
+                ld      (hl), a
+                ret
+; End of function ecView
+; =============== S U B R O U T I N E =======================================
+; Entry point of WRITE command
+ecWrite:
+                call    PostCond        ; Command postconditional and delimiter
+                ld      a, (Case)
+                cp      4
+                jp      z, ecWrite3
+                cp      1
+                jp      nz, ecView1
+ecWrite1:
+                ld      a, (Token)
+                cp      tknAsterisk     ; Is it '*'?
+                jp      nz, ecWrite2
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                call    IntExp          ; Integer-Value expression
+                ld      a, (bmActFL)
+                or      a
+                call    z, WriteAst     ; Writes *n
+                jp      ecWrite3
+; ---------------------------------------------------------------------------
+ecWrite2:                               ; Checks if needed to output !, # or ?x
+                call    ChkCRLFSP
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, ecWrite3
+                call    Expr            ; Expression
+                ld      a, (bmActFL)
+                or      a
+                call    z, Write
+ecWrite3:                               ; Command argument ending
+                call    ComArgEnd
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, ecWrite1
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000001b
+                ld      (hl), a
+                ret
+; End of function ecWrite
+; =============== S U B R O U T I N E =======================================
+; Entry point of XECUTE command
+ecXecute:
+                call    PostCond        ; Command postconditional and delimiter
+                ld      a, (Case)
+                cp      4
+                jp      z, ecXecute3
+                cp      1
+                jp      nz, Error14     ; Illegal command terminator
+ecXecute1:                              ; String-Value expression
+                call    StrExp
+                call    ArgCond         ; Argument conditional
+                ld      a, (Case)
+                cp      1
+                jp      z, ecXecute2
+                ld      a, (bmActFL)
+                or      a
+                call    z, AC26         ; Remove string from the stack
+                jp      ecXecute3
+; ---------------------------------------------------------------------------
+ecXecute2:
+                ld      a, (bmActFL)
+                or      a
+                call    z, bcXecute     ; Body of XECUTE command
+ecXecute3:                              ; Command argument ending
+                call    ComArgEnd
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, ecXecute1
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000001b
+                ld      (hl), a
+                ret
+; End of function ecXecute
+; =============== S U B R O U T I N E =======================================
+; Entry point of ZDELETE command
+eczDelete:
+                call    PostCond        ; Command postconditional and delimiter
+                ld      a, (Case)
+                cp      4
+                jp      z, eczDelete2
+                cp      1
+                jp      nz, Error14     ; Illegal command terminator
+eczDelete1:                             ; Routine name primitive
+                call    RoutineN
+                ld      a, (bmActFL)
+                or      a
+                call    z, bczDelete    ; Body of ZDELETE command
+eczDelete2:                             ; Command argument ending
+                call    ComArgEnd
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, eczDelete1
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000001b
+                ld      (hl), a
+                ret
+; End of function eczDelete
+; =============== S U B R O U T I N E =======================================
+; Entry point of ZGO command
+eczGo:
+                call    PostCond1
+                ld      a, (Case)
+                cp      4
+                jp      z, eczGo2
+                cp      1
+                jp      nz, eczGo1
+                call    IntExp          ; Integer-Value expression
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_4D30
+eczGo1:
+                ld      a, (bmActFL)
+                or      a
+                call    z, bczGo        ; Body of ZGO command
+eczGo2:
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000001b
+                ld      (hl), a
+                ret
+; End of function eczGo
+; =============== S U B R O U T I N E =======================================
+; Entry point of ZINSERT command
+eczInsert:
+                call    PostCond        ; Command postconditional and delimiter
+                ld      a, (Case)
+                cp      4
+                jp      z, eczInsert3
+                cp      1
+                jp      nz, Error14     ; Illegal command terminator
+eczInsert1:                             ; String-Value expression
+                call    StrExp
+                ld      a, (Token)
+                cp      tknColon        ; Is it ':'?
+                jp      nz, eczInsert2
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                call    Liner
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_4900
+eczInsert2:
+                ld      a, (bmActFL)
+                or      a
+                call    z, AC118        ; Insert string at PRGPT
+eczInsert3:                             ; Command argument ending
+                call    ComArgEnd
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, eczInsert1
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000001b
+                ld      (hl), a
+                ret
+; End of function eczInsert
+; =============== S U B R O U T I N E =======================================
+; Entry point of ZLOAD command
+eczLoad:
+                call    PostCond        ; Command postconditional and delimiter
+                ld      a, (Case)
+                cp      4
+                jp      z, eczLoad2
+                cp      1
+                jp      nz, Error14     ; Illegal command terminator
+eczLoad1:                               ; Routine name primitive
+                call    RoutineN
+                ld      a, (bmActFL)
+                or      a
+                call    z, bczLoad      ; Body oz ZLOAD command
+eczLoad2:                               ; Command argument ending
+                call    ComArgEnd
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, eczLoad1
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000001b
+                ld      (hl), a
+                ret
+; End of function eczLoad
+; =============== S U B R O U T I N E =======================================
+; Entry point of ZMOVE command
+eczMove:
+                call    PostCond        ; Command postconditional and delimiter
+                ld      a, (Case)
+                cp      4
+                jp      z, eczMove3
+                cp      1
+                jp      z, eczMove1
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_48F9
+                jp      eczMove4
+; ---------------------------------------------------------------------------
+eczMove1:
+                ld      a, (Token)
+                cp      tknColon        ; Is it ':'?
+                jp      nz, eczMove2
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_4BEC
+                jp      eczMove3
+; ---------------------------------------------------------------------------
+eczMove2:
+                call    Liner
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_4900
+eczMove3:                               ; Command argument ending
+                call    ComArgEnd
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, eczMove2
+eczMove4:
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000001b
+                ld      (hl), a
+                ret
+; End of function eczMove
+; =============== S U B R O U T I N E =======================================
+; Entry point of ZOPTION command
+eczOption:
+                call    PostCond        ; Command postconditional and delimiter
+                ld      a, (Case)
+                cp      4
+                jp      z, eczOption2
+                cp      1
+                jp      z, eczOption1
+                ld      a, (bmActFL)
+                or      a
+                call    z, bczOption
+                jp      eczOption3
+; ---------------------------------------------------------------------------
+eczOption1:
+                ld      a, (bmActFL)
+                or      a
+                call    z, ZeroToS      ; Zero Top of Stack
+                call    DevParam        ; Device parameters
+                ld      a, (bmActFL)
+                or      a
+                call    z, AC119
+eczOption2:                             ; Command argument ending
+                call    ComArgEnd
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, eczOption1
+eczOption3:
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000001b
+                ld      (hl), a
+                ret
+; End of function eczOption
+; =============== S U B R O U T I N E =======================================
+; Entry point of PRINT/ZPRINT command
+ecPrint:
+                call    PostCond        ; Command postconditional and delimiter
+                ld      a, (Case)
+                cp      4
+                jp      z, ecPrint3
+                cp      1
+                jp      z, ecPrint1
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_4914
+                jp      ecPrint4
+; ---------------------------------------------------------------------------
+ecPrint1:
+                ld      a, (Token)
+                cp      tknAsterisk     ; Is it '*'?
+                jp      nz, ecPrint2
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                ld      a, (bmActFL)
+                or      a
+                call    z, AC112        ; PrgPT to End
+                jp      ecPrint3
+; ---------------------------------------------------------------------------
+ecPrint2:
+                call    sub_12AF
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_492D
+ecPrint3:                               ; Command argument ending
+                call    ComArgEnd
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, ecPrint1
+ecPrint4:
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000001b
+                ld      (hl), a
+                ret
+; End of function ecPrint
+; =============== S U B R O U T I N E =======================================
+; Entry point of ZREMOVE command
+eczRemove:
+                call    PostCond        ; Command postconditional and delimiter
+                ld      a, (Case)
+                cp      4
+                jp      z, eczRemove3
+                cp      1
+                jp      z, eczRemove1
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_48A2
+                jp      eczRemove4
+; ---------------------------------------------------------------------------
+eczRemove1:
+                ld      a, (Token)
+                cp      tknAsterisk     ; Is it '*'?
+                jp      nz, eczRemove2
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_4C0D
+                jp      eczRemove3
+; ---------------------------------------------------------------------------
+eczRemove2:
+                call    sub_12AF
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_48D2
+eczRemove3:                             ; Command argument ending
+                call    ComArgEnd
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, eczRemove1
+eczRemove4:
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000001b
+                ld      (hl), a
+                ret
+; End of function eczRemove
+; =============== S U B R O U T I N E =======================================
+; Entry point of ZSAVE command
+eczSave:
+                call    PostCond        ; Command postconditional and delimiter
+                ld      a, (Case)
+                cp      4
+                jp      z, eczSave2
+                cp      1
+                jp      z, eczSave1
+                ld      a, (bmActFL)
+                or      a
+                call    z, bczSave      ; Body of ZSAVE command
+                jp      eczSave3
+; ---------------------------------------------------------------------------
+eczSave1:                               ; Routine name primitive
+                call    RoutineN
+                ld      a, (bmActFL)
+                or      a
+                call    z, bczSaveN     ; Body of ZSAVE <name> command
+eczSave2:                               ; Command argument ending
+                call    ComArgEnd
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, eczSave1
+eczSave3:
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000001b
+                ld      (hl), a
+                ret
+; End of function eczSave
+; =============== S U B R O U T I N E =======================================
+; Ambiguous H commands
+ecHangHalt:
+                call    PostCond        ; Command postconditional and delimiter
+                ld      a, (Case)
+                cp      2
+                jp      z, ecHangHalt1
+                cp      3
+                jp      nz, ecHang1
+ecHangHalt1:                            ; Halt
+                ld      a, (bmActFL)
+                or      a
+                call    z, bcHalt
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000001b
+                ld      (hl), a
+                ret
+; End of function ecHangHalt
+; =============== S U B R O U T I N E =======================================
+; Transfer point primitive
+Trans:
+                call    SSChk           ; Check for room on the syntax stack
+                call    Entry           ; Routine entry
+                ld      a, (bmActFL)
+                or      a
+                call    z, PushCase     ; Push CASE in the stack (AC71)
+                call    ArgCond         ; Argument conditional
+                ld      a, (Case)       ; X return; Transfer point executable
+                cp      1
+                jp      z, TransEnd
+                ld      a, (bmActFL)    ; Remove label[^routine] from stack
+                or      a
+                call    z, ClrTRInfo    ; Clear off transpt info (AC69)
+TransEnd:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; End of function Trans
+; =============== S U B R O U T I N E =======================================
+; Variable/List primitive
+VarList:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, 1
+                ld      (SetSW), a
+                ld      a, (bmActFL)
+                or      a
+                call    z, ZeroToS      ; Zero Top of Stack
+                ld      a, (Token)
+                cp      tknLeftP        ; Is it '('?
+                jp      z, VarList1
+                call    GLVarName       ; Global/Local variable name
+                call    sub_2723
+                jp      VarList2
+; ---------------------------------------------------------------------------
+VarList1:                               ; Loads to (Token) the token code of char (++pStkPos)
+                call    GToken
+                call    GLVarName       ; Global/Local variable name
+                call    sub_2723
+                ld      a, (Token)
+                cp      tknComma        ; Is it ','?
+                jp      z, VarList1
+                cp      tknRightP       ; Is it ')'?
+                jp      nz, Error12     ; Unmatched parentheses
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+VarList2:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ld      a, 0
+                ld      (SetSW), a
+                ret
+; End of function VarList
+; =============== S U B R O U T I N E =======================================
+sub_12AF:
+                call    SSChk           ; Check for room on the syntax stack
+                call    Liner
+                ld      a, 1
+                ld      (Case), a
+                ld      a, (Token)
+                cp      tknColon        ; Is it ':'?
+                jp      nz, loc_12E2
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                ld      a, (Token)
+                cp      tknBlank        ; Is it ' '?
+                jp      z, loc_12D2
+                cp      tknCRLF         ; Is it CR or LF?
+                jp      nz, loc_12DA
+loc_12D2:
+                ld      a, 3
+                ld      (Case), a
+                jp      loc_12E2
+; ---------------------------------------------------------------------------
+loc_12DA:
+                call    Liner
+                ld      a, 2
+                ld      (Case), a
+loc_12E2:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; End of function sub_12AF
+; =============== S U B R O U T I N E =======================================
+; Check for (settable) function name
+CkFunction:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, 1
+                ld      (VariableFL), a ; 0 - Function : 1 - Variable
+                call    Function        ; Check for function reference
+                xor     a
+                ld      (VariableFL), a ; 0 - Function : 1 - Variable
+                ret
+; End of function CkFunction
+; =============== S U B R O U T I N E =======================================
+; Missing linestart character
+Error00:
+                xor     a
+                call    PrintErr        ; Outputs error message
+; End of function Error00
+; =============== S U B R O U T I N E =======================================
+; Stack overflow
+Error01:
+                ld      a, 1
+                call    PrintErr        ; Outputs error message
+; End of function Error01
+; =============== S U B R O U T I N E =======================================
+; Arithmetic overflow
+Error02:
+                ld      a, 2
+                call    PrintErr        ; Outputs error message
+; End of function Error02
+; =============== S U B R O U T I N E =======================================
+; Undefined local variable
+Error03:
+                ld      a, 3
+                call    PrintErr        ; Outputs error message
+; End of function Error03
+; =============== S U B R O U T I N E =======================================
+; Illegal function name
+Error04:
+                ld      a, 4
+                call    PrintErr        ; Outputs error message
+; End of function Error04
+; =============== S U B R O U T I N E =======================================
+; Illegal command name
+Error05:
+                ld      a, 5
+                call    PrintErr        ; Outputs error message
+; End of function Error05
+; =============== S U B R O U T I N E =======================================
+; Undefined program name
+Error06:
+                ld      a, 6
+                call    PrintErr        ; Outputs error message
+; End of function Error06
+; =============== S U B R O U T I N E =======================================
+; Undefined global name
+Error07:
+                ld      a, 7
+                call    PrintErr        ; Outputs error message
+; End of function Error07
+; =============== S U B R O U T I N E =======================================
+; Global+value too long
+Error08:
+                ld      a, 8
+                call    PrintErr        ; Outputs error message
+; End of function Error08
+; =============== S U B R O U T I N E =======================================
+; Directory full
+Error09:
+                ld      a, 9
+                call    PrintErr        ; Outputs error message
+; End of function Error09
+; =============== S U B R O U T I N E =======================================
+; Program larger than partition
+Error10:
+                ld      a, 10
+                call    PrintErr        ; Outputs error message
+; End of function Error10
+; =============== S U B R O U T I N E =======================================
+; String too long
+Error11:
+                ld      a, 11
+                call    PrintErr        ; Outputs error message
+; End of function Error11
+; =============== S U B R O U T I N E =======================================
+; Unmatched parentheses
+Error12:
+                ld      a, 12
+                call    PrintErr        ; Outputs error message
+; End of function Error12
+; =============== S U B R O U T I N E =======================================
+; Illegal use of NOT operator
+Error13:
+                ld      a, 13
+                call    PrintErr        ; Outputs error message
+; End of function Error13
+; =============== S U B R O U T I N E =======================================
+; Illegal command terminator
+Error14:
+                ld      a, 14
+                call    PrintErr        ; Outputs error message
+; End of function Error14
+; =============== S U B R O U T I N E =======================================
+; Too many naked references
+Error15:
+                ld      a, 15
+                call    PrintErr        ; Outputs error message
+; End of function Error15
+; =============== S U B R O U T I N E =======================================
+; Unauthorized global access
+Error16:
+                ld      a, 16
+                call    PrintErr        ; Outputs error message
+; End of function Error16
+; =============== S U B R O U T I N E =======================================
+; Division by zero
+Error17:
+                ld      a, 17
+                call    PrintErr        ; Outputs error message
+; End of function Error17
+; =============== S U B R O U T I N E =======================================
+; Illegal character
+Error18:
+                ld      a, 18
+                call    PrintErr        ; Outputs error message
+; End of function Error18
+; =============== S U B R O U T I N E =======================================
+; Syntax stack overflow
+Error19:
+                ld      a, 19
+                call    PrintErr        ; Outputs error message
+; End of function Error19
+; =============== S U B R O U T I N E =======================================
+; Illegal expression
+Error20:
+                ld      a, (bmActFL)
+                or      a
+                call    z, AC76         ; Unmark symbol table after exclusive kill
+                ld      a, 20
+                call    PrintErr        ; Outputs error message
+; End of function Error20
+; =============== S U B R O U T I N E =======================================
+; Illegal pattern
+Error21:
+                ld      a, 21
+                call    PrintErr        ; Outputs error message
+; End of function Error21
+; =============== S U B R O U T I N E =======================================
+; Missing comma
+Error22:
+                ld      a, 22
+                call    PrintErr        ; Outputs error message
+; End of function Error22
+; =============== S U B R O U T I N E =======================================
+; Illegal variable name
+Error23:
+                ld      a, 23
+                call    PrintErr        ; Outputs error message
+; End of function Error23
+; =============== S U B R O U T I N E =======================================
+; Illegal use of indirection
+Error24:
+                ld      a, 24
+                call    PrintErr        ; Outputs error message
+; End of function Error24
+; =============== S U B R O U T I N E =======================================
+; Undefined routine number
+Error25:
+                ld      a, 25
+                call    PrintErr        ; Outputs error message
+; End of function Error25
+; =============== S U B R O U T I N E =======================================
+; Illegal numeric literal
+Error26:
+                ld      a, 26
+                call    PrintErr        ; Outputs error message
+; End of function Error26
+; =============== S U B R O U T I N E =======================================
+; Missing equal sign
+Error27:
+                ld      a, 27
+                call    PrintErr        ; Outputs error message
+; End of function Error27
+; =============== S U B R O U T I N E =======================================
+; Illegal routine or label name
+Error28:
+                ld      a, 28
+                call    PrintErr        ; Outputs error message
+; End of function Error28
+; =============== S U B R O U T I N E =======================================
+; Invalid name syntax
+Error29:
+                ld      a, 29
+                call    PrintErr        ; Outputs error message
+; End of function Error29
+; =============== S U B R O U T I N E =======================================
+; Unimplemented operation
+Error30:
+                ld      a, 30
+                call    PrintErr        ; Outputs error message
+; End of function Error30
+; =============== S U B R O U T I N E =======================================
+; Symbol table overflow
+Error31:
+                ld      a, 31
+                call    PrintErr        ; Outputs error message
+; End of function Error31
+; =============== S U B R O U T I N E =======================================
+; Duplicated label
+Error33:
+                ld      a, 33
+                call    PrintErr        ; Outputs error message
+; End of function Error33
+; =============== S U B R O U T I N E =======================================
+; Invalid line reference
+Error34:
+                ld      a, 34
+                call    PrintErr        ; Outputs error message
+; End of function Error34
+; =============== S U B R O U T I N E =======================================
+; No true value in $SELECT
+Error35:
+                ld      a, 35
+                call    PrintErr        ; Outputs error message
+; End of function Error35
+; =============== S U B R O U T I N E =======================================
+; Naked global reference illegal
+Error36:
+                ld      a, 36
+                call    PrintErr        ; Outputs error message
+; End of function Error36
+; =============== S U B R O U T I N E =======================================
+; Global file not on disk
+Error37:
+                ld      a, 37
+                call    PrintErr        ; Outputs error message
+; End of function Error37
+; =============== S U B R O U T I N E =======================================
+; Routine not on disk
+Error38:
+                ld      a, 38
+                call    PrintErr        ; Outputs error message
+; End of function Error38
+; =============== S U B R O U T I N E =======================================
+; Disk I/O error
+Error39:
+                ld      a, 39
+                call    PrintErr        ; Outputs error message
+; End of function Error39
+; =============== S U B R O U T I N E =======================================
+; Routine is unnamed
+Error40:
+                ld      a, 40
+                call    PrintErr        ; Outputs error message
+; End of function Error40
+; =============== S U B R O U T I N E =======================================
+; Routine already in library
+Error41:
+                ld      a, 41
+                call    PrintErr        ; Outputs error message
+; End of function Error41
+; =============== S U B R O U T I N E =======================================
+; Remove or save routine
+Error42:
+                ld      a, 42
+                call    PrintErr        ; Outputs error message
+; End of function Error42
+; =============== S U B R O U T I N E =======================================
+; Only used in indirect mode
+Error43:
+                ld      a, 43
+                call    PrintErr        ; Outputs error message
+; End of function Error43
+; =============== S U B R O U T I N E =======================================
+; Illegal command during BREAK
+Error44:
+                ld      a, 44
+                call    PrintErr        ; Outputs error message
+; End of function Error44
+; =============== S U B R O U T I N E =======================================
+; Command only used during BREAK
+Error45:
+                ld      a, 45
+                call    PrintErr        ; Outputs error message
+; End of function Error45
+; =============== S U B R O U T I N E =======================================
+; Subscript missing
+Error46:
+                ld      a, 46
+                call    PrintErr        ; Outputs error message
+; End of function Error46
+; =============== S U B R O U T I N E =======================================
+; Invalid subscript
+Error47:
+                ld      a, 47
+                call    PrintErr        ; Outputs error message
+; End of function Error47
+; =============== S U B R O U T I N E =======================================
+; Invalid parameter
+Error48:
+                ld      a, 48
+                call    PrintErr        ; Outputs error message
+; End of function Error48
+; =============== S U B R O U T I N E =======================================
+; Device not open
+Error49:
+                ld      a, 49
+                call    PrintErr        ; Outputs error message
+; End of function Error49
+; =============== S U B R O U T I N E =======================================
+; Running out of global space
+Error50:
+                ld      a, 50
+                call    PrintErr        ; Outputs error message
+; End of function Error50
+; =============== S U B R O U T I N E =======================================
+; Reading from write only device
+Error51:
+                ld      a, 51
+                call    PrintErr        ; Outputs error message
+; End of function Error51
+; =============== S U B R O U T I N E =======================================
+; Invalid device number
+Error52:
+                ld      a, 52
+                call    PrintErr        ; Outputs error message
+; End of function Error52
+; =============== S U B R O U T I N E =======================================
+; Invalid repetition count
+Error54:
+                ld      a, 54
+                call    PrintErr        ; Outputs error message
+; End of function Error54
+; =============== S U B R O U T I N E =======================================
+; Invalid read count
+Error55:
+                ld      a, 55
+                call    PrintErr        ; Outputs error message
+; End of function Error55
+; =============== S U B R O U T I N E =======================================
+; Argument conditional
+ArgCond:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, 1            ; Set X return
+                ld      (Case), a
+                ld      a, (Token)
+                cp      tknColon        ; Is it ':'?
+                jp      nz, ArgCond1
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                call    TVExp           ; Check for boolean expression
+ArgCond1:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; End of function ArgCond
+; =============== S U B R O U T I N E =======================================
+; Command postconditional and delimiter
+PostCond:
+                call    SSChk           ; Check for room on the syntax stack
+                call    ArgCond         ; Argument conditional
+                ld      a, (Case)
+                cp      1
+                jp      z, PostCond1
+                ld      a, (bmActFL)
+                or      a
+                call    z, SetAFb0      ; Sets bit 0 of bmActFlag
+PostCond1:                              ; Check for room on the syntax stack
+                call    SSChk
+                ld      a, (Token)
+                cp      tknBlank        ; Is it ' '?
+                jp      z, PostCond2
+                cp      tknCRLF         ; Is it CR or LF?
+                jp      nz, Error14     ; Illegal command terminator
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000010b
+                ld      (hl), a
+                ld      a, 2
+                ld      (Case), a
+                jp      PostCond5
+; ---------------------------------------------------------------------------
+PostCond2:                              ; Loads to (Token) the token code of char (++pStkPos)
+                call    GToken
+                ld      a, (Token)
+                cp      tknBlank        ; Is it ' '?
+                jp      nz, PostCond3
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                ld      a, 3
+                ld      (Case), a
+                jp      PostCond5
+; ---------------------------------------------------------------------------
+PostCond3:                              ; Argument level indirection
+                call    IndArg
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, PostCond4
+                ld      a, (Case)
+                cp      4
+                jp      z, PostCond5
+PostCond4:
+                ld      a, 1
+                ld      (Case), a
+PostCond5:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; End of function PostCond
+; =============== S U B R O U T I N E =======================================
+; Command argument ending
+ComArgEnd:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (Token)
+                cp      tknComma        ; Is it ','?
+                jp      nz, ComArgEnd2
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                call    IndArg          ; Argument level indirection
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, ComArgEnd1
+                ld      a, (Case)
+                cp      4
+                jp      z, ComArgEnd    ; Command argument ending
+ComArgEnd1:
+                xor     a
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; ---------------------------------------------------------------------------
+ComArgEnd2:
+                call    CkCRLF
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, ComArgEnd    ; Command argument ending
+ComArgEnd3:                             ; Check for room on the syntax stack
+                call    SSChk
+ComArgEnd4:
+                ld      a, (Token)
+                cp      tknBlank        ; Is it ' '?
+                jp      nz, ComArgEnd5
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                jp      ComArgEnd4
+; ---------------------------------------------------------------------------
+ComArgEnd5:
+                ld      a, (Token)
+                cp      tknSemicolon    ; Is it ';'?
+                jp      z, ComArgEnd6
+                cp      tknCRLF         ; Is it CR or LF?
+                jp      nz, ComArgEnd7
+ComArgEnd6:
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000010b
+                ld      (hl), a
+ComArgEnd7:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; End of function ComArgEnd
+; =============== S U B R O U T I N E =======================================
+; Argument level indirection
+IndArg:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (Token)
+                cp      tknAt           ; Is it '@'?
+                jp      z, IndArg1
+                xor     a
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; ---------------------------------------------------------------------------
+IndArg1:                                ; Loads to (Token) the token code of char (++pStkPos)
+                call    GToken
+                call    ExprAtom        ; Expression atom
+                call    sub_2129
+                ld      a, (Case)
+                cp      1
+                jp      nz, IndArg2
+                ld      a, (Token)
+                cp      tknAt           ; Is it '@'?
+                jp      z, IndArg1
+IndArg2:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; End of function IndArg
+; =============== S U B R O U T I N E =======================================
+; Name level indirection
+IndName:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (Token)      ; Look for @
+                cp      tknAt           ; Is it '@'?
+                jp      z, IndName1
+                call    AC16            ; Test for flag from argument leve; Set Case
+                jp      IndName2
+; ---------------------------------------------------------------------------
+IndName1:                               ; Loads to (Token) the token code of char (++pStkPos)
+                call    GToken
+                call    ExprAtom        ; Expression atom
+                ld      a, 4            ; In case semantic execution inhibited
+                ld      (Case), a
+                ld      a, (bmActFL)    ; Set NamInd; Execute Stack; Set Case
+                or      a
+                call    z, AC109        ; Put indirect string on stack
+                ld      a, (Case)       ; Syntax checking only
+                cp      1
+                jp      nz, IndName2
+                ld      a, (Token)      ; Look for another at sign
+                cp      tknAt           ; Is it '@'?
+                jp      z, IndName1
+IndName2:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; End of function IndName
+; =============== S U B R O U T I N E =======================================
+; Checks if needed to output !, # or ?x
+ChkCRLFSP:
+                call    SSChk           ; Check for room on the syntax stack
+                call    DoCRLFFF        ; Outputs W ! and W #
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, ChkCRLFSP1
+                call    DoHSPC          ; Outputs W ?X (Horizontal Spacing)
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, ChkCRLFSP2
+                xor     a
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; ---------------------------------------------------------------------------
+ChkCRLFSP1:                             ; Outputs W ! and W #
+                call    DoCRLFFF
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, ChkCRLFSP1
+                call    DoHSPC          ; Outputs W ?X (Horizontal Spacing)
+ChkCRLFSP2:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; End of function ChkCRLFSP
+; =============== S U B R O U T I N E =======================================
+; Outputs W ! and W #
+DoCRLFFF:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (Token)
+                cp      tknExclamation  ; Is it '!'?
+                jp      nz, DoCRLFFF1
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                ld      a, (bmActFL)
+                or      a
+                call    z, PrintCRLF
+                jp      DoCRLFFF3
+; ---------------------------------------------------------------------------
+DoCRLFFF1:
+                ld      a, (Token)
+                cp      tknPound        ; Is it '#'?
+                jp      z, DoCRLFFF2
+                xor     a
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; ---------------------------------------------------------------------------
+DoCRLFFF2:                              ; Loads to (Token) the token code of char (++pStkPos)
+                call    GToken
+                ld      a, (bmActFL)
+                or      a
+                call    z, PrintFF
+DoCRLFFF3:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; End of function DoCRLFFF
+; =============== S U B R O U T I N E =======================================
+; Outputs W ?X (Horizontal Spacing)
+DoHSPC:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (Token)
+                cp      tknQuestion     ; Is it '?'?
+                jp      z, DoHSPC1
+                xor     a
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; ---------------------------------------------------------------------------
+DoHSPC1:                                ; Loads to (Token) the token code of char (++pStkPos)
+                call    GToken
+                call    IntExp          ; Integer-Value expression
+                ld      a, (bmActFL)
+                or      a
+                call    z, HSPC         ; Outputs horizontal spacing (W ?x or R ?x)
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; End of function DoHSPC
+; =============== S U B R O U T I N E =======================================
+; Does a timeout after a command
+DoTimeout:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (Token)
+                cp      tknColon        ; Is it ':'?
+                jp      z, DoTimeout1
+                xor     a
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; ---------------------------------------------------------------------------
+DoTimeout1:                             ; Loads to (Token) the token code of char (++pStkPos)
+                call    GToken
+                call    NumExp          ; Numeric-Value expression
+                ld      a, (bmActFL)
+                or      a
+                call    z, Timeout
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; End of function DoTimeout
+; =============== S U B R O U T I N E =======================================
+; Routine entry
+Entry:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (Token)
+                cp      tknCarat        ; Is it '^'?
+                jp      nz, Entry1
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                call    RoutineN        ; Check for routine name
+                ld      a, 1            ; Routine name only case
+                ld      (Case), a
+                jp      Entry2
+; ---------------------------------------------------------------------------
+Entry1:                                 ; Check for label name[+offset]
+                call    Liner
+                xor     a               ; Label only case
+                ld      (Case), a
+                ld      a, (Token)
+                cp      tknCarat        ; Is it '^'?
+                jp      nz, Entry2
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                call    RoutineN        ; Check for routine name
+                ld      a, 2            ; Label and routine name
+                ld      (Case), a
+Entry2:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; End of function Entry
+; =============== S U B R O U T I N E =======================================
+; Routine name primitive
+RoutineN:
+                call    SSChk           ; Check for room on the syntax stack
+                call    IndName         ; Name level indirection
+                ld      a, (Case)       ; Syntax checking only
+                cp      4
+                jp      z, RoutineN1
+                call    LitLabel        ; Check for a literal label
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, Error28     ; Illegal routine or label name
+                ld      a, (bmActFL)
+                or      a
+                call    z, AC110        ; Check for end of all levels of name indir
+RoutineN1:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; End of function RoutineN
+; =============== S U B R O U T I N E =======================================
+Liner:
+                call    SSChk           ; Check for room on the syntax stack
+                call    Label           ; Check for label name
+Linof:                                  ; Check for room on the syntax stack
+                call    SSChk
+                ld      a, (Token)
+                cp      tknPlus         ; Is it '+'?
+                jp      z, Linof1
+                ld      a, (bmActFL)    ; Zero ToS (zero offset)
+                or      a
+                call    z, ZeroToS      ; Zero Top of Stack
+                xor     a
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; ---------------------------------------------------------------------------
+Linof1:                                 ; Loads to (Token) the token code of char (++pStkPos)
+                call    GToken
+                call    IntExp          ; Check for integer offset expression
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; End of function Liner
+; =============== S U B R O U T I N E =======================================
+Label:
+                call    SSChk           ; Check for room on the syntax stack
+                call    IndName         ; Name level indirection
+                ld      a, (Case)
+                cp      4
+                jp      z, Label2
+                call    LitLabel        ; Check for a literal label
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, Label1
+                call    NumLabel        ; Check for a numeric label
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, Error28     ; Illegal routine or label name
+Label1:
+                ld      a, (bmActFL)
+                or      a
+                call    z, AC110        ; Check for end of all levels of name indir
+Label2:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; End of function Label
+; =============== S U B R O U T I N E =======================================
+; Device parameters
+DevParam:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (Token)
+                cp      tknLeftP        ; Is it '('?
+                jp      z, DevParam1
+                call    Expr            ; Expression
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_4A8E
+                jp      DevParam4
+; ---------------------------------------------------------------------------
+DevParam1:                              ; Loads to (Token) the token code of char (++pStkPos)
+                call    GToken
+                jp      DevParam3
+; ---------------------------------------------------------------------------
+DevParam2:                              ; Expression
+                call    Expr
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_4A8E
+                call    sub_1718
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, DevParam2
+                ld      a, (Case)
+                cp      2
+                jp      z, DevParam4
+DevParam3:
+                call    sub_1718
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, DevParam2
+                ld      a, (Case)
+                cp      2
+                jp      z, DevParam4
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_4ADA
+                jp      DevParam3
+; ---------------------------------------------------------------------------
+DevParam4:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; End of function DevParam
+; =============== S U B R O U T I N E =======================================
+sub_1718:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, 1
+                ld      (Case), a
+                ld      a, (Token)
+                cp      tknColon        ; Is it ':'?
+                jp      z, loc_173A
+                ld      a, 2
+                ld      (Case), a
+                ld      a, (Token)
+                cp      tknRightP       ; Is it ')'?
+                jp      z, loc_173A
+                xor     a
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; ---------------------------------------------------------------------------
+loc_173A:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                ret
+; End of function sub_1718
+; =============== S U B R O U T I N E =======================================
+; String-Value expression
+StrExp:
+                call    SSChk           ; Check for room on the syntax stack
+                call    Expr            ; Expression
+                ld      a, (bmActFL)
+                or      a
+                call    z, Null1        ; Does nothing
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; End of function StrExp
+; =============== S U B R O U T I N E =======================================
+; Numeric-Value expression
+NumExp:
+                call    SSChk           ; Check for room on the syntax stack
+                call    Expr            ; Expression
+                ld      a, (bmActFL)
+                or      a
+                call    z, ExprToNum    ; Convert expression to numeric value
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; End of function NumExp
+; =============== S U B R O U T I N E =======================================
+; Integer-Value expression
+IntExp:
+                call    SSChk           ; Check for room on the syntax stack
+                call    Expr            ; Expression
+                ld      a, (bmActFL)    ; Convert to numeric value
+                or      a
+                call    z, ExprToInt    ; Convert expression to integer
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; End of function IntExp
+; =============== S U B R O U T I N E =======================================
+; Truth-Value expression
+TVExp:
+                call    SSChk           ; Check for room on the syntax stack
+                call    Expr            ; Expression
+                ld      a, 1            ; In case semantic execution inhibited
+                ld      (Case), a
+                ld      a, (bmActFL)
+                or      a
+                call    z, ExpToTV      ; Convert expression to truth-value
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; End of function TVExp
+; =============== S U B R O U T I N E =======================================
+; Expression
+Expr:
+                call    SSChk           ; Check for room on the syntax stack
+                call    ExprAtom        ; Expression atom
+Expr1:
+                call    sub_1E76
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, Expr5
+                ld      a, (Token)
+                cp      tknQuote        ; Is it '''?
+                jp      z, Expr3
+                cp      tknQuestion     ; Is it '?'?
+                jp      nz, Expr2
+                ld      hl, bmFlag1     ; bit0:String
+                                        ; bit1:Not
+                                        ; bit2:Dirty
+                                        ; bit4:Break
+                ld      a, 11111101b
+                and     (hl)
+                ld      (hl), a
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                jp      Expr4
+; ---------------------------------------------------------------------------
+Expr2:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; ---------------------------------------------------------------------------
+Expr3:                                  ; Loads to (Token) the token code of char (++pStkPos)
+                call    GToken
+                call    sub_1C60
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, Expr5
+                ld      a, (Token)
+                cp      tknQuestion     ; Is it '?'?
+                jp      nz, Error13     ; Illegal use of NOT operator
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                ld      hl, bmFlag1     ; bit0:String
+                                        ; bit1:Not
+                                        ; bit2:Dirty
+                                        ; bit4:Break
+                ld      a, (hl)
+                or      NOTFL
+                ld      (hl), a
+Expr4:
+                call    sub_17FF
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_44A6
+                jp      Expr1
+; ---------------------------------------------------------------------------
+Expr5:                                  ; Expression atom
+                call    ExprAtom
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_31CA
+                jp      Expr1
+; End of function Expr
+; =============== S U B R O U T I N E =======================================
+sub_17FF:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (bmActFL)
+                or      a
+                call    z, Null1        ; Does nothing
+                ld      (word_02FA), ix
+                call    IndName         ; Name level indirection
+                ld      a, (Case)
+                cp      4
+                jp      z, loc_1835
+                call    sub_183B
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, Error21     ; Illegal pattern
+loc_1823:
+                call    sub_183B
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, loc_1823
+                ld      a, (bmActFL)
+                or      a
+                call    z, AC110        ; Check for end of all levels of name indir
+loc_1835:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; End of function sub_17FF
+; =============== S U B R O U T I N E =======================================
+sub_183B:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (Token)
+                cp      tknPoint        ; Is it '.'?
+                jp      nz, loc_1865
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_4E73
+                call    IntLit          ; Check for integer literal
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, loc_1898
+                ld      a, (bmActFL)
+                or      a
+                call    z, AC115        ; Put integer -1 on ToS
+                jp      loc_1898
+; ---------------------------------------------------------------------------
+loc_1865:                               ; Check for integer literal
+                call    IntLit
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, loc_1871
+                ret
+; ---------------------------------------------------------------------------
+loc_1871:
+                ld      a, (Token)
+                cp      tknPoint        ; Is it '.'?
+                jp      nz, loc_1891
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                call    IntLit          ; Check for integer literal
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, loc_1898
+                ld      a, (bmActFL)
+                or      a
+                call    z, AC115        ; Put integer -1 on ToS
+                jp      loc_1898
+; ---------------------------------------------------------------------------
+loc_1891:
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_4E9C
+loc_1898:
+                call    sub_1FD4
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, loc_18AE
+                call    StrLit          ; Check for string literal
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, Error21     ; Illegal pattern
+loc_18AE:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; End of function sub_183B
+; =============== S U B R O U T I N E =======================================
+; Expression atom
+ExprAtom:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (bmActFL)
+                or      a
+                call    z, ZeroToS      ; Zero Top of Stack
+                call    UnaryOp         ; Count unary operators ( ', + and -)
+                ld      a, (Token)      ; Look for left parenthesis
+                cp      tknLeftP        ; Is it '('?
+                jp      nz, ExprAtom1
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                call    Expr            ; Expression
+                ld      a, (Token)      ; Look for right parenthesis
+                cp      tknRightP       ; Is it ')'?
+                jp      nz, Error12     ; Unmatched parentheses
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+ExprAtomEnd:
+                ld      a, (bmActFL)
+                or      a
+                call    z, ApplyUnOp    ; Apply unary operators, stack ExprAtom
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; ---------------------------------------------------------------------------
+ExprAtom1:                              ; Check for numeric literal
+                call    NumLit
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, ExprAtomEnd
+                call    StrLit          ; Check for string literal
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, ExprAtomEnd
+                call    Function        ; Check for function reference
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, ExprAtomEnd
+                call    LVarName        ; Check for local variable name
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, ExprAtom2
+                ld      a, (bmActFL)    ; Search symbol table for LocalVarName
+                or      a
+                call    z, sub_42C0     ; (todo) AC81
+                jp      ExprAtomEnd
+; ---------------------------------------------------------------------------
+ExprAtom2:                              ; Global variable name
+                call    GVarName
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, Error20     ; Illegal expression
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_443E     ; (todo) AC85
+                jp      ExprAtomEnd
+; End of function ExprAtom
+; =============== S U B R O U T I N E =======================================
+; Global/Local variable name
+GLVarName:
+                call    SSChk           ; Check for room on the syntax stack
+                call    LVarName        ; Check for local variable name
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, GLVarName1
+                ld      a, (bmActFL)
+                or      a
+                call    z, PushOne      ; Push a 1 in the stack
+                jp      GLVarNameE
+; ---------------------------------------------------------------------------
+GLVarName1:                             ; Global variable name
+                call    GVarName
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, Error23     ; Illegal variable name
+                ld      a, (bmActFL)
+                or      a
+                call    z, PushMinusOne ; Push a -1 in the stack
+GLVarNameE:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; End of function GLVarName
+; =============== S U B R O U T I N E =======================================
+; Check for local variable name
+LVarName:
+                call    SSChk           ; (todo) finish this
+                call    IndName         ; Name level indirection
+                ld      a, (Case)
+                cp      4
+                jp      z, GVarNameEnd
+                xor     a
+                ld      (GLB), a
+                call    LitLabel        ; Check for a literal label
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, Subscript
+                xor     a
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; End of function LVarName
+; =============== S U B R O U T I N E =======================================
+; Global variable name
+GVarName:
+                call    SSChk           ; Check for room on the syntax stack
+                call    IndName         ; Check for global variable indirection
+                ld      a, (Case)       ; Syntax checking only
+                cp      4
+                jp      z, GVarNameEnd
+                ld      a, (Token)
+                cp      tknCarat        ; Is it '^'?
+                jp      z, GVarName1
+                xor     a               ; Not a global reference
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; ---------------------------------------------------------------------------
+GVarName1:                              ; Loads to (Token) the token code of char (++pStkPos)
+                call    GToken
+                ld      a, 1
+                ld      (GLB), a
+                ld      a, (Token)
+                cp      tknLeftP        ; Is it '('?
+                jp      nz, GVarName2
+                call    NakedRef        ; Naked reference
+                jp      Subscript
+; ---------------------------------------------------------------------------
+GVarName2:                              ; Check for a literal label
+                call    LitLabel
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, Error23     ; Illegal variable name
+Subscript:
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_4D6E     ; (todo) AC27
+GVarName3:
+                ld      a, (Token)
+                cp      tknLeftP        ; Is it '('?
+                jp      nz, GVarName5
+GVarName4:                              ; Loads to (Token) the token code of char (++pStkPos)
+                call    GToken
+                ld      a, (bmActFL)
+                or      a
+                call    z, PushGlobal   ; Push global on stack
+                call    Expr            ; Check for subscript expression
+                ld      a, (bmActFL)    ; Stack expression value as integer
+                or      a
+                call    z, sub_29C5     ; (todo) AC22
+                ld      a, (Token)      ; Look or comma (more subscripts)
+                cp      tknComma        ; Is it ','?
+                jp      z, GVarName4
+                cp      tknRightP       ; Is it ')'?
+                jp      nz, Error12     ; Unmatched parentheses
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+GVarName5:                              ; Indirection flag
+                ld      a, (IndFL)
+                cp      1
+                jp      nz, GVarName6
+                ld      a, (bmActFL)    ; Check end of one or more levels of name indirection
+                or      a
+                call    z, CkEndNLI     ; Check for end on name level indirection
+                ld      a, (Token)
+                cp      tknAt           ; Is it '@'?
+                jp      nz, GVarName6
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                jp      GVarName3
+; ---------------------------------------------------------------------------
+GVarName6:
+                xor     a
+                ld      (GLB), a
+GVarNameEnd:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; End of function GVarName
+; =============== S U B R O U T I N E =======================================
+; Check for function reference
+Function:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (Token)
+                cp      tknDollar       ; Is it '$'?
+                jp      z, Function1
+                xor     a               ; Not a function or special variable
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; ---------------------------------------------------------------------------
+Function1:                              ; Loads to (Token) the token code of char (++pStkPos)
+                call    GToken
+                call    GetFunSVName    ; Get Function/Special Variable name
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; End of function Function
+;
+;====================  FUNCTION TABLE  ======================================
+;
+; =============== S U B R O U T I N E =======================================
+; Entry point of $ASCII function
+efAscii:
+                call    FSIEX           ; String then integer expression primitive
+                ld      a, (bmActFL)
+                or      a
+                call    z, bfAscii      ; Body of $ASCII function
+                jp      fEnd            ; Function ending primitive
+; End of function efAscii
+; =============== S U B R O U T I N E =======================================
+; Entry point of $CHAR function
+efChar:
+                ld      a, (bmActFL)
+                or      a
+                call    z, ZeroToS      ; Zero Top of Stack
+efChar1:                                ; Integer-Value expression
+                call    IntExp
+                ld      a, (bmActFL)
+                or      a
+                call    z, bfChar       ; Body of $CHAR function
+                ld      a, (Token)
+                cp      tknComma        ; Is it ','?
+                jp      nz, efChar2     ; Compress character on stack
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                jp      efChar1
+; ---------------------------------------------------------------------------
+efChar2:                                ; Compress character on stack
+                ld      a, (bmActFL)
+                or      a
+                call    z, AC104        ; Make stack ToS to string for $CHAR
+                jp      fEnd            ; Function ending primitive
+; End of function efChar
+; =============== S U B R O U T I N E =======================================
+; Entry point of $DATA function
+efData:
+                call    GLVarName       ; Global/Local variable name
+                ld      a, (bmActFL)
+                or      a
+                call    z, bfData       ; Body of $DATA function
+                jp      fEnd            ; Function ending primitive
+; End of function efData
+; =============== S U B R O U T I N E =======================================
+; Entry point of $EXTRACT function
+efExtract:
+                call    FSIEX           ; String then integer expression primitive
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, efExtract1
+                ld      a, 1
+                ld      (Case), a
+                jp      efExtract2
+; ---------------------------------------------------------------------------
+efExtract1:                             ; Integer expression primitive
+                call    IntExpr
+                ld      a, 2
+                ld      (Case), a
+efExtract2:                             ; Extract characters
+                ld      a, (bmActFL)
+                or      a
+                call    z, bfExtract    ; Body of $EXTRACT function
+                jp      fEnd            ; Function ending primitive
+; End of function efExtract
+; =============== S U B R O U T I N E =======================================
+; Entry point of $FIND function
+efFind:
+                call    FSSEX           ; Two strings then integer expression primitive
+                ld      a, (bmActFL)
+                or      a
+                call    z, bfFind       ; Body of $FIND function
+                jp      fEnd            ; Function ending primitive
+; End of function efFind
+; =============== S U B R O U T I N E =======================================
+; Entry point of $JUSTIFY function
+efJustify:
+                call    Expr            ; Expression
+                call    IntExpr         ; Integer expression primitive
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, Error22     ; Missing comma
+                call    IntExpr         ; Integer expression primitive
+                ld      a, (bmActFL)
+                or      a
+                call    z, bfJustify    ; Body of $JUSTIFY function
+                jp      fEnd            ; Function ending primitive
+; End of function efJustify
+; =============== S U B R O U T I N E =======================================
+; Entry point of $LENGTH function
+efLength:
+                call    StrExp          ; String-Value expression
+                ld      a, 0
+                ld      (Result), a     ; Holds the result of called function
+                ld      a, (Token)
+                cp      tknComma        ; Is it ','?
+                jp      nz, efLength1
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                call    StrExp          ; String-Value expression
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+efLength1:
+                ld      a, (bmActFL)
+                or      a
+                call    z, bfLength     ; Body of $LENGTH function
+                jp      fEnd            ; Function ending primitive
+; End of function efLength
+; =============== S U B R O U T I N E =======================================
+; Entry point of $NEXT function
+efNext:
+                ld      a, 1
+                ld      (bFlagNext), a
+                call    GLVarName       ; Global/Local variable name
+                ld      a, (bmActFL)
+                or      a
+                call    z, bfNxtOrd     ; Body of $NEXT and $ORDER functions
+                xor     a
+                ld      (bFlagNext), a
+                jp      fEnd            ; Function ending primitive
+; End of function efNext
+; =============== S U B R O U T I N E =======================================
+; Entry point of $ORDER function
+efOrder:
+                ld      a, 1
+                ld      (bFlagOrder), a
+                call    GLVarName       ; Global/Local variable name
+                ld      a, (bmActFL)
+                or      a
+                call    z, bfNxtOrd     ; Body of $NEXT and $ORDER functions
+                xor     a
+                ld      (bFlagOrder), a
+                jp      fEnd            ; Function ending primitive
+; End of function efOrder
+; =============== S U B R O U T I N E =======================================
+; Entry point of $PIECE command
+efPiece:
+                call    FSSEX           ; Two strings then integer expression primitive
+                ld      a, 1
+                ld      (Case), a
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, efPiece1
+                call    IntExpr         ; Integer expression primitive
+                ld      a, 2
+                ld      (Case), a
+efPiece1:
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_3367
+                jp      fEnd            ; Function ending primitive
+; End of function efPiece
+; =============== S U B R O U T I N E =======================================
+; Entry point of $RANDOM function
+efRandom:
+                call    IntExp          ; Integer-Value expression
+                ld      a, (bmActFL)
+                or      a
+                call    z, bfRandom     ; Body of $RANDOM function
+                jp      fEnd            ; Function ending primitive
+; End of function efRandom
+; =============== S U B R O U T I N E =======================================
+; Entry point of $SELECT function
+efSelect:
+                ld      a, (bmActFL)
+                push    af
+                call    sub_2616
+efSelect1:                              ; Truth-Value expression
+                call    TVExp
+                ld      a, (Token)
+                cp      tknColon        ; Is it ':'?
+                jp      nz, Error18     ; Illegal character
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, efSelect2
+                ld      a, (Case)
+                cp      1
+                jp      z, efSelect3
+                ld      a, (bmActFL)
+                or      a
+                call    z, SetAFb0      ; Sets bit 0 of bmActFlag
+efSelect2:                              ; Expression
+                call    Expr
+                call    ClrAFB0         ; Clears bit 0 of bmActFlag
+                jp      efSelect4
+; ---------------------------------------------------------------------------
+efSelect3:                              ; Expression
+                call    Expr
+                ld      a, (bmActFL)
+                or      a
+                call    z, AC105
+efSelect4:
+                ld      a, (Token)
+                cp      tknComma        ; Is it ','?
+                jp      nz, efSelect5
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                jp      efSelect1
+; ---------------------------------------------------------------------------
+efSelect5:
+                call    CheckTrueV
+                pop     af
+                ld      (bmActFL), a
+                jp      fEnd            ; Function ending primitive
+; End of function efSelect
+; =============== S U B R O U T I N E =======================================
+; Entry point of $TEXT function
+efText:
+                call    Linof
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, efText1
+                ld      a, (bmActFL)
+                or      a
+                call    z, bfTextO      ; Body of $TEXT function with Offset
+                jp      fEnd            ; Function ending primitive
+; ---------------------------------------------------------------------------
+efText1:
+                call    Liner
+                ld      a, (bmActFL)
+                or      a
+                call    z, bfTextL      ; Body of $TEXT function with LineRef
+                jp      fEnd            ; Function ending primitive
+; End of function efText
+; =============== S U B R O U T I N E =======================================
+; Entry point of $VIEW function (not implemented)
+efView:
+                jp      Error30         ; Unimplemented operation
+; ---------------------------------------------------------------------------
+                jp      fEnd            ; Function ending primitive
+; End of function efView
+; =============== S U B R O U T I N E =======================================
+; Entry point of $ZCHECK function
+efzCheck:
+                call    Expr            ; Expression
+                ld      a, (bmActFL)
+                or      a
+                call    z, bfcCheck     ; Body of $ZCHECK function
+                jp      fEnd            ; Function ending primitive
+; End of function efzCheck
+; =============== S U B R O U T I N E =======================================
+; Entry point of $ZEXISTS function
+efzExists:
+                call    Expr            ; Expression
+                ld      a, (bmActFL)
+                or      a
+                call    z, bfzExists    ; Body of $ZEXISTS function
+                jp      fEnd            ; Function ending primitive
+; End of function efzExists
+; =============== S U B R O U T I N E =======================================
+; Entry point of $ZORDER function
+efzOrder:
+                ld      a, 1
+                ld      (bFlagOrder), a
+                call    GVarName        ; Global variable name
+                xor     a
+                ld      (bFlagOrder), a
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, Error20      ; Illegal expression
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_4EAC
+                jp      fEnd            ; Function ending primitive
+; End of function efzOrder
+;
+;===============  FUNCTION PRIMITIVE TABLE  =================================
+;
+; =============== S U B R O U T I N E =======================================
+; Two strings then integer expression primitive
+FSSEX:
+                call    SSChk           ; Check for room on the syntax stack
+                call    StrExp          ; String-Value expression
+                ld      a, (Token)
+                cp      tknComma        ; Is it ','?
+                jp      nz, Error22     ; Missing comma
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+; End of function FSSEX
+; =============== S U B R O U T I N E =======================================
+; String then integer expression primitive
+FSIEX:
+                call    SSChk           ; Check for room on the syntax stack
+                call    StrExp          ; String-Value expression
+IntExpr:                                ; Integer expression primitive
+                call    SSChk
+                ld      a, (Token)
+                cp      tknComma        ; Is it ','?
+                jp      z, FP1
+                xor     a
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; ---------------------------------------------------------------------------
+FP1:                                    ; Loads to (Token) the token code of char (++pStkPos)
+                call    GToken
+                call    IntExp          ; Integer-Value expression
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; End of function FSIEX
+; =============== S U B R O U T I N E =======================================
+; Function ending primitive
+fEnd:
+                ld      a, (Token)
+                cp      tknRightP       ; Is it ')'?
+                jp      nz, Error12     ; Unmatched parentheses
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; End of function fEnd
+;
+;============  END OF FUNCTION PRIMITIVE TABLE  =============================
+;
+; =============== S U B R O U T I N E =======================================
+CkCRLF:
+                call    SSChk           ; Check for room on the syntax stack
+                xor     a
+                ld      (Result), a     ; Holds the result of called function
+                ld      a, (IndFL)      ; Indirection flag
+                cp      2
+                jp      nz, CkCRLF1
+                ld      a, (Token)
+                cp      tknCRLF         ; Is it CR or LF?
+                jp      nz, Error24     ; Illegal use of indirection
+                call    IndRet          ; Return from indirection
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+CkCRLF1:
+                ret
+; End of function CkCRLF
+; =============== S U B R O U T I N E =======================================
+sub_1C60:
+                call    SSChk           ; Check for room on the syntax stack
+                xor     a
+                ld      (Result), a     ; Holds the result of called function
+                ld      a, (Token)
+                cp      tknAmper        ; Is it '&'?
+                jp      c, locret_1CA6
+                ld      a, tknEqual     ; Is it '='?
+                ld      hl, Token
+                cp      (hl)
+                jp      c, locret_1CA6
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, loc_1C9E
+                ld      a, tknGtrT      ; Is it '>'?
+                ld      hl, Token
+                cp      (hl)
+                jp      c, loc_1C8E
+                call    ExprToNum       ; Convert expression to numeric value
+                jp      loc_1C91
+; ---------------------------------------------------------------------------
+loc_1C8E:                               ; Does nothing
+                call    Null1
+loc_1C91:
+                ld      a, (Token)
+                add     a, tknInvalid
+                ld      (Token), a
+                ld      (ix+0), a
+                inc     ix
+loc_1C9E:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+locret_1CA6:
+                ret
+; End of function sub_1C60
+; =============== S U B R O U T I N E =======================================
+; Get Function/Special Variable name
+GetFunSVName:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (VariableFL) ; 0 - Function : 1 - Variable
+                or      a
+                jp      z, GetFunSVName1
+                call    GetSVName
+                jp      GetFunSVName2
+; ---------------------------------------------------------------------------
+GetFunSVName1:
+                call    GetFunName
+GetFunSVName2:
+                ret
+; End of function GetFunSVName
+; =============== S U B R O U T I N E =======================================
+; Entry point of $HOROLOG variable
+evHorolog:
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, fFinish
+                call    GetCurTime      ; Returns nothing as this is CP/M
+                ld      hl, ibcdDay     ; Day in BCD5
+                call    BCD5ToStr       ; Convert BCD5 in (HL) to string and push it
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (I1), a
+                ld      (ix+0), ','     ; Push $H delimiter (,)
+                inc     ix
+                ld      hl, ibcdTime    ; Time in BCD5
+                call    BCD5ToStr       ; Convert BCD5 in (HL) to string and push it
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (I2), a
+                ld      a, (I1)
+                ld      hl, I2
+                add     a, (hl)
+                ld      (I1), a
+                ld      hl, I1
+                inc     (hl)
+                ld      a, (I1)
+                ld      (ix+0), a
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                ret
+; End of function evHorolog
+; =============== S U B R O U T I N E =======================================
+; Entry point of $IO variable
+evIo:
+                ld      a, (IODevice)   ; Current IO device
+                ld      (tmpChar2), a
+                jp      PushChar        ; Push char in A to stack
+; End of function evIo
+; =============== S U B R O U T I N E =======================================
+; Entry point of $JOB variable
+evJob:
+                ld      de, ibcdTemp0
+                ld      hl, JobIndex
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+                jp      PushBCD5        ; Push BCD5 in (HL) to stack
+; End of function evJob
+; =============== S U B R O U T I N E =======================================
+; Entry point of $STORAGE variable
+evStorage:
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, fFinish
+                ld      hl, (pSymbolTbl) ; Pointer to the symbol table
+                ld      de, (word_9F9A)
+                or      a
+                sbc     hl, de
+                ld      (pIndex), hl
+                call    sub_9321
+                ret
+; End of function evStorage
+; =============== S U B R O U T I N E =======================================
+; Entry point of $TEST variable
+evTest:
+                ld      a, (IfSW)
+                cp      2
+                jp      z, Error03      ; Undefined local variable
+                ld      (tmpChar2), a
+                jp      PushChar        ; Push char in A to stack
+; End of function evTest
+; =============== S U B R O U T I N E =======================================
+; Entry point of $X variable
+evX:
+                ld      a, (VariableFL) ; 0 - Function : 1 - Variable
+                or      a
+                jp      z, evX1
+                ld      (SetBs), ix
+                ld      a, 1
+                ld      (SetFL), a
+                ld      (ix+0), 24h     ; '$'
+                inc     ix
+                ld      (ix+0), 58h     ; 'X'
+                inc     ix
+                ret
+; ---------------------------------------------------------------------------
+evX1:
+                ld      de, ibcdTemp0
+                ld      hl, (pDevX)     ; X position (BCD5)
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+                jp      PushBCD5        ; Push BCD5 in (HL) to stack
+; End of function evX
+; =============== S U B R O U T I N E =======================================
+; Entry point of $Y variable
+evY:
+                ld      a, (VariableFL) ; 0 - Function : 1 - Variable
+                or      a
+                jp      z, evY1
+                ld      (SetBs), ix
+                ld      a, 1
+                ld      (SetFL), a
+                ld      (ix+0), 24h     ; '$'
+                inc     ix
+                ld      (ix+0), 59h     ; 'Y'
+                inc     ix
+                ret
+; ---------------------------------------------------------------------------
+evY1:
+                ld      de, ibcdTemp0
+                ld      hl, (pDevY)     ; Y position (BCD5)
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+                jp      PushBCD5        ; Push BCD5 in (HL) to stack
+; End of function evY
+; =============== S U B R O U T I N E =======================================
+; Entry point of $PIECE variable
+esvPiece:
+                ld      (SetBs), ix
+                call    GLVarName       ; Global/Local variable name
+                ld      a, (Token)
+                cp      tknComma        ; Is it ','?
+                jp      nz, Error22     ; Missing comma
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                call    FSIEX           ; String then integer expression primitive
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, esvPiece1
+                ld      a, 1
+                ld      (Case), a
+                jp      esvPiece2
+; ---------------------------------------------------------------------------
+esvPiece1:                              ; Integer expression primitive
+                call    IntExpr
+                ld      a, 2
+                ld      (Case), a
+esvPiece2:
+                ld      a, (Token)
+                cp      tknRightP       ; Is it ')'?
+                jp      nz, Error12     ; Unmatched parentheses
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                ld      a, (bmActFL)
+                or      a
+                call    z, sub_4E86
+                ld      a, 1
+                ld      (SetFL), a
+                ret
+; End of function esvPiece
+; =============== S U B R O U T I N E =======================================
+; Entry point of $ERROR variable
+esvError:
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, fFinish
+                ld      a, (VariableFL) ; 0 - Function : 1 - Variable
+                or      a
+                jp      nz, esvError1
+                ld      hl, byte_A04B
+                call    PushSTR         ; Pushes a MStr into the stack
+                ret
+; ---------------------------------------------------------------------------
+esvError1:
+                ld      hl, byte_A04B
+                ld      (word_A049), hl
+                ret
+; End of function esvError
+; =============== S U B R O U T I N E =======================================
+; Entry point of $ZNAME variable
+evzName:
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, fFinish
+                ld      hl, (pRtnName)  ; Pointer to the current routine name
+                call    PushSTR         ; Pushes a MStr into the stack
+                ret
+; End of function evzName
+; =============== S U B R O U T I N E =======================================
+; Entry point of $ZCOUNT variable
+evzCount:
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, fFinish
+                call    sub_7974
+                ld      hl, (word_A648)
+                ld      (pIndex), hl
+                call    sub_9321
+                ret
+; End of function evzCount
+; =============== S U B R O U T I N E =======================================
+; Entry point of $ZGLOBAL variable
+evzGlobal:
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, fFinish
+                ld      a, (GlobalsDR)  ; Default drive for globals (0-F)
+                add     a, 41h          ; 'A'
+                ld      (tmpChar2), a
+                ld      (ix+0), a
+                inc     ix
+                ld      (ix+0), 1
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                ret
+; End of function evzGlobal
+; =============== S U B R O U T I N E =======================================
+; Entry point of $ZROUTINE variable
+evzRoutine:
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, fFinish
+                ld      a, (RoutinesDR) ; Default drive for routines (0-F)
+                add     a, 41h          ; 'A'
+                ld      (tmpChar2), a
+                ld      (ix+0), a
+                inc     ix
+                ld      (ix+0), 1
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                ret
+; End of function evzRoutine
+; =============== S U B R O U T I N E =======================================
+; Push BCD5 in (HL) to stack
+PushBCD5:
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, fFinish
+                ld      hl, ibcdTemp0
+                call    BCD5ToStr       ; Convert BCD5 in (HL) to string and push it
+                ret
+; End of function PushBCD5
+; =============== S U B R O U T I N E =======================================
+; Push char in A to stack
+PushChar:
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, fFinish
+                ld      a, (tmpChar2)
+                call    CharToStr       ; Convert char in A to string and push it
+; End of function PushChar
+; =============== S U B R O U T I N E =======================================
+fFinish:
+                ret
+; End of function fFinish
+; =============== S U B R O U T I N E =======================================
+sub_1E76:
+                call    SSChk           ; Check for room on the syntax stack
+                xor     a
+                ld      (Result), a     ; Set result to 0
+                ld      a, (Token)
+                cp      tknPlus         ; Is it '+'?
+                jp      c, locret_1EB7
+                ld      a, tknUnderscore
+                ld      hl, Token
+                cp      (hl)            ; Is it '_'?
+                jp      c, locret_1EB7
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, loc_1EAF
+                ld      a, tknGtrT
+                ld      hl, Token
+                cp      (hl)            ; Is it '>'?
+                jp      c, loc_1EA4
+                call    ExprToNum       ; Convert expression to numeric value
+                jp      loc_1EA7
+; ---------------------------------------------------------------------------
+loc_1EA4:                               ; Does nothing
+                call    Null1
+loc_1EA7:
+                ld      a, (Token)
+                ld      (ix+0), a
+                inc     ix
+loc_1EAF:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+locret_1EB7:
+                ret
+; End of function sub_1E76
+; =============== S U B R O U T I N E =======================================
+; Naked reference
+NakedRef:
+                ld      a, (Locks)
+                cp      1
+                jp      z, Error36      ; Naked global reference illegal
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, NakedRefEnd
+                ld      a, 1
+                ld      (NR), a
+                ld      (ix+0), 0
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+NakedRefEnd:
+                ret
+; End of function NakedRef
+; =============== S U B R O U T I N E =======================================
+; Check for string literal
+StrLit:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, 0
+                ld      (Result), a     ; Holds the result of called function
+                ld      a, (Token)
+                cp      tknQuotes       ; Is it '"'?
+                jp      nz, StrLitEnd
+                ld      a, 1            ; It is a string
+                ld      (Result), a     ; Holds the result of called function
+                xor     a               ; Initialize character count
+                ld      (NumOfParams), a
+                ld      a, (PF)
+                or      a
+                jp      z, StrLit2
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, StrLit2
+                ld      hl, ibcdUnk05
+                call    StrToBCD        ; Converts string on ToS to BCD in (HL)
+                ld      hl, ibcd1
+                call    StrToBCD        ; Converts string on ToS to BCD in (HL)
+                ld      hl, ibcdUnk05
+                ld      a, (hl)
+                and     11110000b
+                jp      nz, StrLit1
+                ld      hl, ibcd1
+                ld      de, ibcdUnk05
+                call    SCmp0           ; Compares two strings (sets BC=INTLN*257 first)
+                jp      c, Error54      ; Invalid repetition count
+StrLit1:
+                ld      (ix+0), 0
+                inc     ix
+                ld      (TPP), ix
+                ld      (ix+0), 0
+                inc     ix
+StrLit2:                                ; Loads to (Token) the token code of char (++pStkPos)
+                call    GToken
+                ld      a, (Token)      ; Is it the end of the string?
+                cp      tknQuotes       ; Is it '"'?
+                jp      nz, StrLit3
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                ld      a, (Token)
+                cp      tknQuotes       ; Is it '"'?
+                jp      nz, StrLit5
+                jp      StrLit4
+; ---------------------------------------------------------------------------
+StrLit3:
+                ld      a, (Token)
+                cp      1               ; Is it 'a' to 'z'?
+                jp      c, Error18      ; Illegal character
+                cp      tknTAB          ; Is it TAB?
+                jp      c, StrLit4
+                jp      Error18         ; Illegal character
+; ---------------------------------------------------------------------------
+StrLit4:
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, StrLit2
+                ld      a, (NumOfParams)
+                cp      255
+                jp      z, Error11      ; String too long
+                ld      hl, (Index)
+                ld      a, (hl)
+                ld      (ix+0), a
+                inc     ix
+                ld      hl, NumOfParams
+                inc     (hl)
+                jp      StrLit2
+; ---------------------------------------------------------------------------
+StrLit5:
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, StrLitEnd
+                ld      a, (PF)
+                cp      0
+                jp      z, StrLit6
+                ld      hl, (TPP)
+                ld      a, (NumOfParams)
+                ld      (hl), a
+                ld      (TPP), ix
+                ld      hl, (TPP)
+                ld      de, ibcd1
+                call    CopyIntDEHL     ; Copy INTLN bytes from (DE) to (HL) ; SetI
+                ld      hl, (TPP)
+                ld      de, 5
+                add     hl, de
+                ld      (TPP), hl
+                ld      de, ibcdUnk05
+                call    CopyIntDEHL     ; Copy INTLN bytes from (DE) to (HL) ; SetI
+                ld      hl, (TPP)
+                ld      de, 5
+                add     hl, de
+                ld      (TPP), hl
+                ld      ix, (TPP)
+                call    SSChk           ; Check for room on the syntax stack
+                jp      StrLitEnd
+; ---------------------------------------------------------------------------
+StrLit6:                                ; Save length of string
+                ld      a, (NumOfParams)
+                ld      (ix+0), a
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+StrLitEnd:
+                ld      a, 0
+                ld      (PF), a
+                ret
+; End of function StrLit
+; =============== S U B R O U T I N E =======================================
+sub_1FD4:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, 0
+                ld      (Result), a     ; Holds the result of called function
+                xor     a
+                ld      (Count), a
+                ld      a, (Token)
+                cp      tknUppercase    ; Is it 'A' to 'Z'?
+                jp      z, loc_2002
+                ld      a, (Token)
+                cp      tknLowercase    ; Is it 'a' to 'z'?
+                jp      nz, loc_1FFA
+                ld      hl, (Index)
+                ld      a, 11011111b    ; Uppercase mask
+                and     (hl)
+                ld      (hl), a
+                jp      loc_2002
+; ---------------------------------------------------------------------------
+loc_1FFA:
+                ld      a, 1
+                ld      (PF), a
+                jp      locret_20DC
+; ---------------------------------------------------------------------------
+loc_2002:
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, loc_203A
+                ld      hl, ibcdUnk05
+                call    StrToBCD        ; Converts string on ToS to BCD in (HL)
+                ld      hl, ibcd1
+                call    StrToBCD        ; Converts string on ToS to BCD in (HL)
+                ld      hl, ibcdUnk05
+                ld      a, (hl)
+                and     11110000b
+                jp      nz, loc_202A
+                ld      hl, ibcd1
+                ld      de, ibcdUnk05
+                call    SCmp0           ; Compares two strings (sets BC=INTLN*257 first)
+                jp      c, Error54      ; Invalid repetition count
+loc_202A:
+                ld      (ix+0), 1
+                inc     ix
+                ld      (TPP), ix
+                ld      (ix+0), 0
+                inc     ix
+loc_203A:
+                ld      hl, (Index)
+                ld      a, (hl)
+                cp      55h             ; 'U'
+                jp      z, loc_206A
+                ld      a, (hl)
+                cp      4Ch             ; 'L'
+                jp      z, loc_206A
+                ld      a, (hl)
+                cp      41h             ; 'A'
+                jp      z, loc_206A
+                ld      a, (hl)
+                cp      4Eh             ; 'N'
+                jp      z, loc_206A
+                ld      a, (hl)
+                cp      50h             ; 'P'
+                jp      z, loc_206A
+                ld      a, (hl)
+                cp      43h             ; 'C'
+                jp      z, loc_206A
+                ld      a, (hl)
+                cp      45h             ; 'E'
+                jp      z, loc_206A
+                jp      Error21         ; Illegal pattern
+; ---------------------------------------------------------------------------
+loc_206A:
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, loc_207E
+                ld      hl, (Index)
+                ld      a, (hl)
+                ld      (ix+0), a
+                inc     ix
+                ld      hl, Count
+                inc     (hl)
+loc_207E:                               ; Loads to (Token) the token code of char (++pStkPos)
+                call    GToken
+                ld      a, (Token)
+                cp      tknUppercase    ; Is it 'A' to 'Z'?
+                jp      z, loc_203A
+                ld      a, (Token)
+                cp      tknLowercase    ; Is it 'a' to 'Z'?
+                jp      nz, loc_209B
+                ld      hl, (Index)
+                ld      a, 11011111b    ; Uppercase mask
+                and     (hl)
+                ld      (hl), a
+                jp      loc_203A
+; ---------------------------------------------------------------------------
+loc_209B:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, locret_20DC
+                ld      hl, (TPP)
+                ld      a, (Count)
+                ld      (hl), a
+                ld      (TPP), ix
+                ld      hl, (TPP)
+                ld      de, ibcd1
+                call    CopyIntDEHL     ; Copy INTLN bytes from (DE) to (HL) ; SetI
+                ld      hl, (TPP)
+                ld      de, 5
+                add     hl, de
+                ld      (TPP), hl
+                ld      de, ibcdUnk05
+                call    CopyIntDEHL     ; Copy INTLN bytes from (DE) to (HL) ; SetI
+                ld      hl, (TPP)
+                ld      de, 5
+                add     hl, de
+                ld      (TPP), hl
+                ld      ix, (TPP)
+                call    SSChk           ; Check for room on the syntax stack
+locret_20DC:
+                ret
+; End of function sub_1FD4
+; =============== S U B R O U T I N E =======================================
+; Count unary operators ( ', + and -)
+UnaryOp:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, UnaryOp1
+                dec     ix              ; Get unary operator count
+                ld      a, (ix+0)
+                ld      (tmpChar2), a
+UnaryOp1:
+                ld      a, (Token)
+                cp      tknQuote        ; Is it '''?
+                jp      c, UnaryOp3
+                ld      a, tknMinus
+                ld      hl, Token
+                cp      (hl)            ; Is it '-'?
+                jp      c, UnaryOp3
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, UnaryOp2
+                ld      a, (Token)      ; Save unary operator
+                ld      (ix+0), a
+                inc     ix
+UnaryOp2:                               ; Increment count
+                ld      hl, tmpChar2
+                inc     (hl)
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                jp      UnaryOp1
+; ---------------------------------------------------------------------------
+UnaryOp3:
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, UnaryOpEnd
+                ld      a, (tmpChar2)   ; Save count
+                ld      (ix+0), a
+                inc     ix
+UnaryOpEnd:
+                ret
+; End of function UnaryOp
+; =============== S U B R O U T I N E =======================================
+sub_2129:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, 1
+                ld      (tmpChar2), a
+                ld      a, 4
+                ld      (Case), a
+                ld      a, (Token)
+                cp      tknComma        ; Is it ','?
+                jp      z, loc_2148
+                cp      tknBlank        ; Is it ' '?
+                jp      z, loc_2148
+                cp      tknCRLF         ; Is it CR of LF?
+                jp      nz, loc_214D
+loc_2148:
+                ld      a, 2
+                ld      (tmpChar2), a
+loc_214D:
+                ld      a, (bmActFL)
+                or      a
+                jp      z, loc_2167
+                ld      a, (tmpChar2)
+                cp      2
+                jp      z, locret_2166
+                ld      a, 255
+                ld      (Token), a
+                ld      a, 3
+                ld      (Case), a
+locret_2166:
+                ret
+; ---------------------------------------------------------------------------
+loc_2167:                               ; Does nothing
+                call    Null1
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (StrLen), a     ; Length of the current string (plus 1)
+                ld      (N), a
+                ld      (pTmp1), ix
+                xor     a
+                ld      (I1), a
+loc_217F:
+                ld      a, (N)
+                or      a
+                jp      z, loc_21C5
+                ld      hl, (pTmp1)
+                dec     hl
+                ld      (pTmp1), hl
+                ld      hl, N
+                dec     (hl)
+                ld      hl, (pTmp1)
+                ld      a, (hl)
+                cp      CR
+                jp      z, Error24      ; Illegal use of indirection
+                ld      a, (hl)
+                cp      CR
+                jp      z, Error24      ; Illegal use of indirection
+                ld      a, (hl)
+                cp      Blank           ; Space
+                jp      z, loc_21BB
+                ld      a, (hl)
+                cp      Quotes          ; "
+                jp      nz, loc_217F
+                ld      a, 1
+                ld      hl, I1
+                sub     (hl)
+                ld      (I2), a
+                ld      (I1), a
+                jp      loc_217F
+; ---------------------------------------------------------------------------
+loc_21BB:
+                ld      a, (I1)
+                or      a
+                jp      z, Error24      ; Illegal use of indirection
+                jp      loc_217F
+; ---------------------------------------------------------------------------
+loc_21C5:                               ; Length of the current string (plus 1)
+                ld      a, (StrLen)
+                cp      255
+                jp      z, Error11      ; String too long
+                ld      hl, StrLen      ; Length of the current string (plus 1)
+                inc     (hl)
+                ld      (ix+0), CR
+                inc     ix
+                ld      a, (StrLen)     ; Length of the current string (plus 1)
+                ld      (ix+0), a
+                inc     ix
+                ld      hl, (pStkStart)
+                ld      (pLineBefore), hl ; Pointer to the previous routine line
+                ld      a, (Mode)
+                cp      0
+                jp      nz, loc_2207
+                ld      de, (pLineBefore) ; Pointer to the previous routine line
+                ld      hl, (Index)
+                or      a
+                sbc     hl, de
+                ld      (Index), hl
+                ld      de, (pStartOfRtn) ; Pointer to the start of the loaded routine
+                ld      hl, (pLineBefore) ; Pointer to the previous routine line
+                or      a
+                sbc     hl, de
+                ld      (pLineBefore), hl ; Pointer to the previous routine line
+loc_2207:                               ; Pointer to the previous routine line
+                ld      hl, (pLineBefore)
+                call    PushP           ; Pushes pointer in HL onto the stack
+                ld      hl, (Index)
+                call    PushP           ; Pushes pointer in HL onto the stack
+                ld      hl, (pTmp1)
+                ld      (Index), hl
+                ld      (pStkStart), hl
+                dec     hl
+                ld      (Index), hl
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                ld      a, (tmpChar2)
+                cp      2
+                jp      z, loc_2242
+                ld      a, (Token)
+                cp      tknQuote        ; Is it '''?
+                jp      c, loc_2242
+                cp      tknPercent      ; Is it '%'?
+                jp      z, loc_2242
+                cp      tknCarat        ; Is it '^'?
+                jp      z, loc_2242
+                cp      tknAt           ; Is it '@'?
+                jp      nz, Error24     ; Illegal use of indirection
+loc_2242:                               ; Indirection flag
+                ld      a, (IndFL)
+                ld      (ix+0), a
+                inc     ix
+                ld      a, (Mode)
+                ld      (ix+0), a
+                inc     ix
+                ld      a, (tmpChar2)
+                ld      (IndFL), a      ; Indirection flag
+                ld      a, 3
+                ld      (Mode), a
+                ld      a, 3
+                ld      hl, tmpChar2
+                sub     (hl)
+                ld      (Case), a
+                ret
+; End of function sub_2129
+; =============== S U B R O U T I N E =======================================
+; Check for numeric literal
+NumLit:
+                call    SSChk           ; Check for room on the syntax stack
+                xor     a               ; Minus flag
+                ld      (Signal1), a
+                ld      a, 255          ; Set digit count
+                ld      (I1), a
+                xor     a
+                ld      (tmpChar2), a
+                ld      (I2), a         ; Size of integer part
+                ld      (I3), a         ; Size of decimal fraction
+                ld      a, (bmFlag1)    ; bit0:String
+                                        ; bit1:Not
+                                        ; bit2:Dirty
+                                        ; bit4:Break
+                and     STRNG
+                jp      z, NumLit1
+                ld      a, (StrLen)     ; Length of the current string (plus 1)
+                ld      (I1), a
+NumLit1:
+                ld      a, TRUE
+                ld      (Delete), a     ; Delete leading zeros
+                ld      (PtrX1), ix     ; Save start of integer
+                call    IntLit          ; Check for integer literal
+                ld      a, (Result)     ; Holds the result of called function
+                cp      FALSE
+                jp      z, NumLit3
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, NumLit2
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (I2), a
+NumLit2:
+                ld      a, 1
+                ld      (tmpChar2), a
+NumLit3:
+                ld      (PtrX2), ix
+                ld      a, (Token)
+                cp      tknPoint        ; Is it '.'?
+                jp      nz, NumLit9
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                ld      hl, I1
+                dec     (hl)
+                ld      a, (I1)
+                or      a
+                jp      z, NumLit22
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, NumLit5
+                ld      a, (I2)
+                cp      1
+                jp      nz, NumLit4
+                ld      hl, (PtrX1)
+                ld      a, (hl)
+                cp      30h             ; '0'
+                jp      nz, NumLit4
+                dec     ix
+                xor     a
+                ld      (I2), a
+                ld      hl, (PtrX2)
+                dec     hl
+                ld      (PtrX2), hl
+NumLit4:                                ; Add decimal place
+                ld      (ix+0), Point
+                inc     ix
+NumLit5:                                ; Check for integer literal
+                call    IntLit
+                ld      a, (Result)     ; Holds the result of called function
+                cp      FALSE
+                jp      z, NumLit8
+                ld      a, TRUE
+                ld      (tmpChar2), a
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, NumLit9
+                dec     ix              ; Get count of decimal digits
+                dec     ix
+                ld      a, (ix+0)
+                ld      (I3), a
+NumLit6:                                ; Get rid of trailing zeros
+                dec     ix
+                ld      a, (ix+0)
+                ld      (tmpChar1), a
+                cp      30h             ; '0'
+                jp      nz, NumLit7
+                ld      hl, I3
+                dec     (hl)
+                ld      a, (I3)
+                or      a
+                jp      nz, NumLit6
+                jp      NumLit8
+; ---------------------------------------------------------------------------
+NumLit7:                                ; Put last digit back
+                ld      a, (tmpChar1)
+                ld      (ix+0), a
+                inc     ix
+                jp      NumLit9
+; ---------------------------------------------------------------------------
+NumLit8:
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, NumLit9
+                dec     ix              ; Get rid of decimal place
+NumLit9:
+                ld      a, (Signal1)
+                cp      1
+                jp      z, NumLit22
+                ld      a, (tmpChar2)
+                cp      TRUE
+                jp      nz, NumLitEnd
+                ld      hl, (Index)     ; Check for exponent
+                ld      a, (hl)
+                cp      45h             ; 'E'
+                jp      nz, NumLit22
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                ld      hl, I1
+                dec     (hl)
+                ld      a, (I1)
+                or      a
+                jp      z, NumLit22
+                ld      a, (Token)      ; Check for E+
+                cp      tknPlus         ; Is it '+'?
+                jp      z, NumLit10
+                cp      tknMinus        ; Is it '-'?
+                jp      nz, NumLit11
+                ld      a, 1            ; Set minus flag
+                ld      (Signal1), a
+NumLit10:
+                ld      hl, I1
+                dec     (hl)
+                ld      a, (I1)
+                or      a
+                jp      z, NumLit22
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+NumLit11:
+                ld      a, TRUE
+                ld      (Delete), a
+                call    IntLit          ; Get exponent
+                ld      a, (Result)     ; Holds the result of called function
+                or      a
+                jp      z, NumLitErr
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, NumLitEnd
+                call    StrToChar       ; Converts a string on ToS to char (0-255)
+                ld      (I1), a
+                ld      a, (Result)     ; Holds the result of called function
+                cp      FALSE
+                jp      z, Error26      ; Illegal numeric literal
+                ld      a, 63h          ; 'c' (todo) Check this
+                ld      hl, I1
+                cp      (hl)
+                jp      c, Error26      ; Illegal numeric literal
+                ld      a, (I3)
+                or      a
+                jp      nz, NumLit12
+                ld      a, (I2)
+                or      a
+                jp      z, NumLit22
+                cp      1
+                jp      nz, NumLit12
+                ld      hl, (PtrX1)
+                ld      a, (hl)
+                cp      30h             ; '0'
+                jp      z, NumLit22
+NumLit12:                               ; Jump is exponent < 0
+                ld      a, (Signal1)
+                cp      1
+                jp      z, NumLit18
+                ld      hl, (PtrX2)     ; PtrX1 at decimal place
+                ld      (PtrX1), hl
+                inc     hl
+                ld      (PtrX2), hl
+                ld      a, (I2)         ; Include I1 digits in integer part
+                ld      hl, I1
+                add     a, (hl)
+                ld      (I2), a
+                ld      a, (I1)         ; Jump if Exp is < # of fraction digits
+                ld      hl, I3
+                cp      (hl)
+                jp      c, NumLit17
+                ld      hl, I2
+                cp      (hl)
+                jp      nz, NumLit14
+NumLit13:
+                ld      a, (I3)
+                or      a
+                jp      z, NumLit14
+                ld      hl, (PtrX2)
+                ld      a, (hl)
+                cp      30h             ; '0'
+                jp      nz, NumLit14
+                inc     hl
+                ld      (PtrX2), hl
+                ld      hl, I3
+                dec     (hl)
+                ld      hl, I2
+                dec     (hl)
+                ld      hl, I1
+                dec     (hl)
+                jp      NumLit13
+; ---------------------------------------------------------------------------
+NumLit14:                               ; Shift fraction over DP
+                ld      hl, (PtrX1)
+                ex      de, hl
+                ld      hl, (PtrX2)
+                ld      a, (I3)
+                call    ShiftDn         ; Shifts the stack towards its base
+                ld      a, (I1)         ; And add I1-I3 zeros
+                ld      hl, I3
+                sub     (hl)
+                ld      (I1), a
+NumLit15:
+                ld      a, (I1)
+                or      a
+                jp      z, NumLit16
+                ld      (ix+0), 30h     ; '0'
+                inc     ix
+                ld      hl, I1
+                dec     (hl)
+                jp      NumLit15
+; ---------------------------------------------------------------------------
+NumLit16:
+                xor     a
+                ld      (I3), a
+                jp      NumLit22
+; ---------------------------------------------------------------------------
+NumLit17:
+                ld      a, (I3)
+                ld      hl, I1
+                sub     (hl)
+                ld      (I3), a
+                ld      de, (PtrX1)
+                ld      hl, (PtrX2)
+                ld      a, (I1)
+                call    CopyAup         ; Copy A bytes from (HL)->(DE) up
+                ld      hl, (PtrX1)
+                ld      a, (I1)
+                ld      c, a
+                ld      b, 0
+                add     hl, bc
+                ld      (PtrX1), hl
+                ld      (hl), 2Eh       ; '.'
+                jp      NumLit22
+; ---------------------------------------------------------------------------
+NumLit18:
+                ld      a, (I1)
+                or      a
+                jp      z, NumLit22
+                ld      a, (I2)         ; Jump if integer digits < EXP
+                ld      hl, I1
+                cp      (hl)
+                jp      c, NumLit20
+                ld      hl, (PtrX2)
+                ld      (PtrX1), hl
+                dec     hl
+                ld      (PtrX2), hl
+                ld      a, (I1)
+                ld      (IXT), a
+                ld      a, (I3)
+                or      a
+                jp      nz, NumLit19
+                ld      (ix+0), 0
+                inc     ix
+NumLit19:
+                ld      hl, (PtrX1)
+                ex      de, hl
+                ld      hl, (PtrX2)
+                ld      a, (IXT)
+                call    CopyAdn         ; Copy A bytes from (HL)->(DE) down
+                ld      (PtrX2), hl
+                ex      de, hl
+                ld      (PtrX1), hl
+                ld      (hl), 2Eh       ; '.'
+                ld      a, (I2)
+                ld      hl, I1
+                sub     (hl)
+                ld      (I2), a
+                jp      NumLit21
+; ---------------------------------------------------------------------------
+NumLit20:
+                ld      hl, (PtrX1)
+                inc     hl
+                ld      (PtrX), hl
+                ex      de, hl          ; Shift fraction over DP
+                ld      hl, (PtrX1)
+                ld      a, (I2)
+                call    ShiftUp         ; Shifts the stack towards its top
+                ld      hl, (PtrX)
+                ld      (PtrX2), hl
+                ld      hl, I3
+                add     a, (hl)
+                ld      (IXT), a
+                ld      a, (I1)
+                ld      hl, I2
+                sub     (hl)
+                ld      (I4), a
+                ld      hl, (PtrX2)
+                ld      c, a
+                ld      b, 0
+                add     hl, bc
+                ld      (PtrX2), hl
+                ex      de, hl
+                ld      a, (IXT)
+                call    ShiftUp         ; Shifts the stack towards its top
+                ld      hl, (PtrX1)
+                ld      (hl), 2Eh       ; '.'
+                inc     hl
+                ld      (PtrX1), hl
+                ld      b, 30h          ; '0'
+                ld      a, (I4)
+                call    FillHLB         ; Fills A bytes in (hl) with B
+                xor     a
+                ld      (I2), a
+NumLit21:
+                ld      a, (I3)
+                ld      hl, I1
+                add     a, (hl)
+                ld      (I3), a
+                or      a
+                jp      nz, NumLit6
+NumLit22:
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, NumLitEnd
+                ld      a, (I3)
+                or      a
+                jp      z, NumLit23
+                ld      hl, I3          ; Include DP
+                inc     (hl)
+NumLit23:                               ; Total size
+                ld      a, (I3)
+                ld      hl, I2
+                add     a, (hl)
+                ld      (I3), a
+                or      a
+                jp      nz, NumLit24
+                ld      (ix+0), 30h     ; '0'
+                inc     ix
+                ld      a, 1
+                ld      (I3), a
+NumLit24:
+                ld      a, (I3)
+                ld      (ix+0), a
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+NumLitEnd:
+                ld      a, (tmpChar2)
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; ---------------------------------------------------------------------------
+NumLitErr:                              ; bit0:String
+                ld      a, (bmFlag1)    ; bit1:Not
+                                        ; bit2:Dirty
+                                        ; bit4:Break
+                and     STRNG
+                jp      z, Error26      ; Illegal numeric literal
+                jp      NumLit22
+; End of function NumLit
+; =============== S U B R O U T I N E =======================================
+; Check for integer literal
+IntLit:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (bmFlag1)    ; bit0:String
+                                        ; bit1:Not
+                                        ; bit2:Dirty
+                                        ; bit4:Break
+                and     STRNG
+                jp      nz, IntLit1
+                ld      a, 255          ; Set digit count
+                ld      (I1), a
+IntLit1:
+                xor     a
+                ld      (N), a
+                ld      a, FALSE
+                ld      (Result), a     ; Holds the result of called function
+                ld      a, (I1)
+                or      a
+                jp      z, IntLitEnd
+                ld      a, (Token)      ; Check for digit
+                cp      tknNumber       ; Is it '0' to '9'?
+                jp      nz, IntLitEnd
+                ld      a, TRUE         ; It is a digit
+                ld      (Result), a     ; Holds the result of called function
+IntLit2:
+                ld      a, (I1)
+                or      a
+                jp      z, IntLit6
+                ld      a, (Delete)
+                cp      FALSE
+                jp      z, IntLit3
+                ld      hl, (Index)
+                ld      a, (hl)
+                cp      30h             ; '0'
+                jp      z, IntLit5
+                ld      a, FALSE
+                ld      (Delete), a
+IntLit3:
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, IntLit4
+                ld      hl, (Index)
+                ld      a, (hl)
+                ld      (ix+0), a
+                inc     ix
+IntLit4:
+                ld      hl, N
+                inc     (hl)
+IntLit5:
+                ld      hl, I1
+                dec     (hl)
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                ld      a, (Token)
+                cp      tknNumber       ; Is it '0' to '9'?
+                jp      z, IntLit2
+IntLit6:
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, IntLitEnd
+                ld      a, (N)
+                or      a
+                jp      nz, IntLit7
+                ld      (ix+0), 30h     ; '0'
+                inc     ix
+                ld      hl, N
+                inc     (hl)
+IntLit7:
+                ld      a, (N)
+                ld      (ix+0), a
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+IntLitEnd:
+                ld      a, 0
+                ld      (Delete), a
+                ret
+; End of function IntLit
+; =============== S U B R O U T I N E =======================================
+sub_2616:
+                ld      a, (bmActFL)
+                ld      (IOTemp2), a
+                or      a
+                jp      z, locret_2625
+                ld      a, 10b
+                ld      (bmActFL), a
+locret_2625:
+                ret
+; End of function sub_2616
+; =============== S U B R O U T I N E =======================================
+; Clears bit 0 of bmActFlag
+ClrAFB0:
+                ld      hl, bmActFL
+                ld      a, 11111110b
+                and     (hl)
+                ld      (hl), a
+                ret
+; End of function ClrAFB0
+; =============== S U B R O U T I N E =======================================
+CheckTrueV:
+                ld      a, (IOTemp2)
+                or      a
+                jp      z, Error35      ; No true value in $SELECT
+                ret
+; End of function CheckTrueV
+; =============== S U B R O U T I N E =======================================
+; Check for a literal label
+LitLabel:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (Token)
+                cp      tknLowercase    ; Is it 'a' to 'z'?
+                jp      z, NameLit1
+                cp      tknUppercase    ; Is it 'A' to 'Z'?
+                jp      z, NameLit1
+                cp      tknPercent      ; Is it '%'?
+                jp      z, NameLit1
+                ld      a, 0            ; Not a name
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; ---------------------------------------------------------------------------
+NameLit1:                               ; It is a name
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                xor     a
+                ld      (NameLen), a    ; Length of the current variable name
+                ld      (pName), ix
+NameLit2:
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, NameLit3
+                ld      a, (NameLen)    ; Length of the current variable name
+                cp      8
+                jp      z, NameLit3
+                ld      hl, (Index)
+                ld      a, (hl)         ; Push the character
+                ld      (ix+0), a
+                inc     ix
+                ld      hl, NameLen     ; Length of the current variable name
+                inc     (hl)
+NameLit3:                               ; Get next token value
+                call    GToken
+                ld      a, (Token)
+                or      a
+                jp      z, NameLit4
+                ld      a, tknNumber
+                ld      hl, Token
+                cp      (hl)
+                jp      c, NameLit4
+                jp      NameLit2
+; ---------------------------------------------------------------------------
+NameLit4:
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, NameLitEnd
+                ld      a, (NameLen)    ; Save name length
+                ld      (ix+0), a
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+NameLitEnd:
+                ret
+; End of function LitLabel
+; =============== S U B R O U T I N E =======================================
+; Check for name indir during arg indir
+AC16:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, 1
+                ld      (Case), a
+                ld      a, (bmActFL)
+                or      a
+                jp      z, AC16End
+                ld      a, (Token)
+                cp      0FFh            ; (todo) Check this
+                jp      nz, AC16End
+                ld      a, 4
+                ld      (Case), a
+                ld      hl, (Index)
+                dec     hl
+                ld      (Index), hl
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+AC16End:
+                ret
+; End of function AC16
+; =============== S U B R O U T I N E =======================================
+; Check for a numeric label
+NumLabel:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (Token)
+                cp      tknNumber       ; Is it '0' to '9'?
+                jp      z, NumLabel1
+                xor     a
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; ---------------------------------------------------------------------------
+NumLabel1:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                xor     a
+                ld      (Count), a
+NumLabel2:
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, NumLabel3
+                ld      a, (Count)
+                cp      8
+                jp      z, NumLabel3
+                ld      hl, (Index)
+                ld      a, (hl)
+                ld      (ix+0), a
+                inc     ix
+                ld      hl, Count
+                inc     (hl)
+NumLabel3:                              ; Loads to (Token) the token code of char (++pStkPos)
+                call    GToken
+                ld      a, (Token)
+                cp      tknNumber       ; Is it '0' to '9'?
+                jp      z, NumLabel2
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, NumLabelE
+                ld      a, (Count)
+                ld      (ix+0), a
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+NumLabelE:
+                ret
+; End of function NumLabel
+; =============== S U B R O U T I N E =======================================
+sub_2723:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (bmActFL)
+                or      a
+                jp      nz, locret_27A0
+                ld      a, 1
+                ld      (SetFL), a
+                dec     ix
+                ld      a, (ix+0)
+                ld      (IOTemp1), a
+                call    IXtoHL          ; Loads the value in (IX) into HL
+                ld      (pTmp4), hl
+                ld      (pIndex), ix
+                ld      de, (pTmp4)
+                ld      hl, (pIndex)
+                or      a
+                sbc     hl, de
+                dec     hl
+                ld      (pIndex), hl
+                ld      a, (hl)
+                ld      (Count), a
+                inc     hl
+                ld      (pTmp1), hl
+                or      a
+                jp      nz, loc_2764
+                ld      hl, (pIndex)
+                ld      (SetBs), hl
+loc_2764:
+                ld      hl, Count
+                inc     (hl)
+                ld      a, (IOTemp1)
+                cp      1
+                jp      z, loc_277C
+                ld      hl, (pTmp1)
+                inc     hl
+                ld      a, (hl)
+                or      10000000b
+                ld      (hl), a
+                dec     hl
+                ld      (pTmp1), hl
+loc_277C:
+                ld      bc, (pTmp4)
+                ld      hl, (pIndex)
+                ex      de, hl
+                ld      hl, (pTmp1)
+                call    CopyBCup        ; Copy BC bytes from (HL)->(DE) up
+                ld      (pTmp1), hl
+                ex      de, hl
+                ld      (pIndex), hl
+                ld      ix, (pIndex)
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (Count)
+                ld      (ix+0), a
+                inc     ix
+locret_27A0:
+                ret
+; End of function sub_2723
+; =============== S U B R O U T I N E =======================================
+; Apply unary operators, stack ExprAtom
+ApplyUnOp:
+                call    SSChk           ; Check for room on the syntax stack
+                xor     a
+                ld      (byte_04E9), a
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (byte_04E7), a
+                ld      (pTmp3), ix
+                ld      hl, (pTmp3)
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     hl, bc
+                ld      (pTmp3), hl
+                dec     hl
+                ld      (pTmp4), hl
+                ld      a, (hl)
+                ld      (ITX), a
+                or      a
+                jp      z, loc_288D
+                ld      a, (byte_04E7)
+                ld      (ix+0), a
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                call    ExprToNum       ; Convert expression to numeric value
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (byte_04E7), a
+                ld      hl, (pTmp3)
+                ld      a, (hl)
+                cp      Minus
+                jp      nz, loc_2802
+                ld      a, 1
+                ld      (byte_04E9), a
+                ld      hl, byte_04E7
+                dec     (hl)
+                ld      hl, (pTmp3)
+                inc     hl
+                ld      (pTmp3), hl
+loc_2802:
+                ld      hl, (pTmp4)
+                dec     hl
+                ld      (pTmp4), hl
+                xor     a
+                ld      (byte_04EA), a
+                ld      (Case), a
+loc_2810:
+                ld      hl, (pTmp4)
+                ld      a, (hl)
+                ld      (N), a
+                cp      5
+                jp      z, loc_2856
+                cp      6
+                jp      nz, loc_282C
+                ld      a, (byte_04E9)
+                xor     00000001b
+                ld      (byte_04E9), a
+                jp      loc_2856
+; ---------------------------------------------------------------------------
+loc_282C:
+                ld      a, (byte_04EA)
+                cp      1
+                jp      z, loc_284A
+                ld      a, 1
+                ld      (byte_04EA), a
+                ld      a, (byte_04E7)
+                ld      (ix+0), a
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                call    ExpToTV         ; Convert expression to truth-value
+loc_284A:
+                ld      a, (Case)
+                xor     00000001b
+                ld      (Case), a
+                xor     a
+                ld      (byte_04E9), a
+loc_2856:
+                ld      hl, ITX
+                dec     (hl)
+                ld      hl, (pTmp4)
+                dec     hl
+                ld      (pTmp4), hl
+                ld      a, (ITX)
+                or      a
+                jp      nz, loc_2810
+                inc     hl
+                ld      (pTmp4), hl
+                ld      a, (byte_04EA)
+                cp      1
+                jp      z, loc_289D
+                ld      hl, (pTmp3)
+                ld      a, (hl)
+                cp      30h             ; '0'
+                jp      z, loc_289D
+                ld      a, (byte_04E9)
+                or      a
+                jp      z, loc_288D
+                ld      hl, (pTmp4)
+                ld      (hl), Minus
+                inc     hl
+                ld      (pTmp4), hl
+loc_288D:
+                ld      hl, (pTmp4)
+                ex      de, hl
+                ld      hl, (pTmp3)
+                ld      a, (byte_04E7)
+                call    ShiftDn         ; Shifts the stack towards its base
+                jp      loc_28CF
+; ---------------------------------------------------------------------------
+loc_289D:
+                ld      ix, (pTmp4)
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, 1
+                ld      (byte_04E7), a
+                ld      a, (Case)
+                or      a
+                jp      z, loc_28C6
+                ld      a, (byte_04E9)
+                or      a
+                jp      z, loc_28BD
+                ld      (ix+0), Minus
+                inc     ix
+loc_28BD:                               ; '1'
+                ld      (ix+0), 31h
+                inc     ix
+                jp      loc_28CF
+; ---------------------------------------------------------------------------
+loc_28C6:                               ; '0'
+                ld      (ix+0), 30h
+                inc     ix
+                jp      loc_28DA
+; ---------------------------------------------------------------------------
+loc_28CF:
+                ld      a, (byte_04E9)
+                or      a
+                jp      z, loc_28DA
+                ld      hl, byte_04E7
+                inc     (hl)
+loc_28DA:
+                ld      a, (byte_04E7)
+                ld      (ix+0), a
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                ret
+; End of function ApplyUnOp
+; =============== S U B R O U T I N E =======================================
+; Zero Top of Stack
+ZeroToS:
+                ld      (ix+0), 0
+                inc     ix
+                ret
+; End of function ZeroToS
+; =============== S U B R O U T I N E =======================================
+; Body of $JUSTIFY function
+bfJustify:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, ibcdTemp1
+                call    StrToBCD        ; Converts string on ToS to BCD in (HL)
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, bfJustify3
+                call    Null1           ; Does nothing
+bfJustify1:
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (tmpChar2), a
+                ld      hl, ibcdTemp1
+                ld      a, (hl)
+                and     11110000b
+                jp      nz, bfJustify2
+                ld      hl, ibcdTemp0
+                ld      a, (tmpChar2)
+                call    sub_9535
+                ld      de, ibcdTemp1
+                call    SCmp0           ; Compares two strings (sets BC=INTLN*257 first)
+                jp      c, bfJustify2
+                jp      z, bfJustify2
+                ld      hl, ibcdTemp1
+                ld      de, ibcdTemp0
+                ld      c, 5
+                call    SbcdDEHL        ; Subtracts two C bytes long BCDs in (DE) and (HL)
+                                        ; result goes in (HL)
+                call    BCD5ToChar      ; Converts BCD5 in (HL) into char in A
+                ld      (N), a
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, Error20      ; Illegal expression
+                ld      (pTmp2), ix
+                ld      hl, (pTmp2)
+                ld      a, (tmpChar2)
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     hl, bc
+                ld      (pTmp2), hl
+                ld      a, (N)
+                ld      c, a
+                ld      b, 0
+                add     hl, bc
+                ld      (pTmp3), hl
+                ex      de, hl
+                ld      hl, (pTmp2)
+                ld      a, (tmpChar2)
+                call    ShiftUp         ; Shifts the stack towards its top
+                ld      hl, N
+                add     a, (hl)
+                ld      (tmpChar2), a
+                ld      hl, (pTmp2)
+                ld      b, Blank        ; Space
+                ld      a, (N)
+                call    FillHLB         ; Fills A bytes in (hl) with B
+bfJustify2:
+                ld      a, (tmpChar2)
+                ld      (ix+0), a
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                ret
+; ---------------------------------------------------------------------------
+bfJustify3:
+                ld      hl, ibcdTemp2
+                call    StrToBCD        ; Converts string on ToS to BCD in (HL)
+                call    ExprToNum       ; Convert expression to numeric value
+                ld      hl, ibcdTemp1
+                ld      a, (hl)
+                and     11110000b
+                jp      nz, Error30     ; Unimplemented operation
+                call    BCD5ToChar      ; Converts BCD5 in (HL) into char in A
+                ld      (I6), a
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, Error20      ; Illegal expression
+                ld      a, 1
+                ld      (DollarJ), a
+                call    sub_935C
+                xor     a
+                ld      (DollarJ), a
+                ld      de, ibcdTemp1
+                ld      hl, ibcdTemp2
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+                jp      bfJustify1
+; End of function bfJustify
+; =============== S U B R O U T I N E =======================================
+sub_29C5:
+                call    SSChk           ; Check for room on the syntax stack
+                call    sub_50FE
+                ld      hl, (pTmp1)
+                ld      (pTmp3), hl
+                ld      (pTmp4), hl
+                ld      a, (hl)
+                ld      (GLB), a
+                dec     hl
+                ld      a, (hl)
+                ld      (SetSW), a
+                dec     hl
+                ld      a, (hl)
+                ld      (NR), a
+                dec     hl
+                ld      a, (hl)
+                ld      (IndFL), a      ; Indirection flag
+                ld      bc, -(PTRLN)
+                add     hl, bc
+                ld      (pTmp3), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (pTmp2), hl
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (StrLen), a     ; Length of the current string (plus 1)
+                call    sub_4F6E
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, loc_2A18
+                ld      hl, StrLen      ; Length of the current string (plus 1)
+                inc     (hl)
+                ld      hl, (pTmp4)
+                ld      a, (tmpChar2)
+                ld      (hl), a
+                jp      loc_2A1F
+; ---------------------------------------------------------------------------
+loc_2A18:
+                ld      hl, (pTmp4)
+                inc     hl
+                ld      (pTmp4), hl
+loc_2A1F:                               ; Length of the current string (plus 1)
+                ld      a, (StrLen)
+                or      a
+                jp      nz, loc_2A2E
+                ld      a, (bFlagOrder)
+                cp      1
+                jp      nz, Error47     ; Invalid subscript
+loc_2A2E:
+                ld      hl, (pTmp3)
+                ld      de, (pTmp2)
+                or      a
+                sbc     hl, de
+                ld      (pTmp1), hl
+                inc     (hl)
+                ld      hl, (pTmp3)
+                ld      a, (StrLen)     ; Length of the current string (plus 1)
+                ld      (hl), a
+                inc     hl
+                ld      (pTmp3), hl
+                ex      de, hl
+                ld      hl, (pTmp4)
+                call    ShiftDn         ; Shifts the stack towards its base
+                ld      hl, (pTmp2)
+                ld      c, a
+                ld      b, 0
+                add     hl, bc
+                inc     hl
+                ld      (pTmp2), hl
+                call    PushP           ; Pushes pointer in HL onto the stack
+                ret
+; End of function sub_29C5
+; =============== S U B R O U T I N E =======================================
+; Body of ZSAVE <name> command
+bczSaveN:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, TRtnName    ; Temp routine name storage
+                call    pullNumber      ; Pulls a number in MStr format from the stack into (HL)
+                ld      hl, TRtnName    ; Temp routine name storage
+                call    PushSTR         ; Pushes a MStr into the stack
+                ld      a, (RoutinesDR) ; Default drive for routines (0-F)
+                ld      (Drive), a      ; Current disk drive
+                ld      a, 1
+                ld      (FCBType), a    ; 0:Global, 1:Routine, 2:File
+                call    FFirst          ; Find first file
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, bczSaveN1
+                ld      a, (bmFlag1)    ; bit0:String
+                                        ; bit1:Not
+                                        ; bit2:Dirty
+                                        ; bit4:Break
+                and     DIRTY
+                jp      z, Error41      ; Routine already in library
+                call    FDelete         ; Delete file
+bczSaveN1:                              ; Save routine
+                call    SaveRtn
+                ld      hl, bmFlag1     ; bit0:String
+                                        ; bit1:Not
+                                        ; bit2:Dirty
+                                        ; bit4:Break
+                ld      a, 11111011b    ; Marks routine buffer as clear
+                and     (hl)
+                ld      (hl), a
+                ld      hl, (pRtnName)  ; Pointer to the current routine name
+                ex      de, hl
+                ld      hl, TRtnName    ; Temp routine name storage
+                call    CopyHLDE        ; Copy (HL) bytes from (HL) to (DE)
+                ret
+; End of function bczSaveN
+; =============== S U B R O U T I N E =======================================
+PrintCRLF:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, CR
+                ld      (tmpChar1), a
+                call    writeChar       ; Outputs the character on A to the current IODevice
+                ld      a, LF
+                ld      (tmpChar1), a
+                call    writeChar       ; Outputs the character on A to the current IODevice
+                ld      hl, (pDevX)     ; X position (BCD5)
+                ld      de, ibcdV0
+                call    CopyIntDEHL     ; Copy INTLN bytes from (DE) to (HL) ; SetI
+                ld      hl, (pDevY)     ; Y position (BCD5)
+                ld      de, ibcdV1
+                ld      c, 5
+                call    AbcdDEHL        ; Adds two C bytes long BCDs in (DE) and (HL)
+                                        ; result goes in (HL)
+                ret
+; End of function PrintCRLF
+; =============== S U B R O U T I N E =======================================
+PrintFF:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, CR
+                ld      (tmpChar1), a
+                call    writeChar       ; Outputs the character on A to the current IODevice
+                ld      a, (IODevice)   ; Current IO device
+                or      a
+                jp      nz, PrintFF2
+                ld      hl, ClrScrSize
+                ld      (pTmp1), hl
+                ld      a, (hl)
+                ld      (tmpChar2), a
+PrintFF1:
+                ld      hl, (pTmp1)
+                inc     hl
+                ld      (pTmp1), hl
+                ld      a, (hl)
+                ld      (tmpChar1), a
+                call    writeChar       ; Outputs the character on A to the current IODevice
+                ld      hl, tmpChar2
+                dec     (hl)
+                ld      a, (tmpChar2)
+                or      a
+                jp      nz, PrintFF1
+                jp      PrintFF3
+; ---------------------------------------------------------------------------
+PrintFF2:
+                ld      a, FF
+                ld      (tmpChar1), a
+                call    writeChar       ; Outputs the character on A to the current IODevice
+PrintFF3:                               ; X position (BCD5)
+                ld      hl, (pDevX)
+                ld      de, ibcdV0
+                call    CopyIntDEHL     ; Copy INTLN bytes from (DE) to (HL) ; SetI
+                ld      hl, (pDevY)     ; Y position (BCD5)
+                ld      de, ibcdV0
+                call    CopyIntDEHL     ; Copy INTLN bytes from (DE) to (HL) ; SetI
+                ret
+; End of function PrintFF
+; =============== S U B R O U T I N E =======================================
+; Remove string from the stack
+AC26:
+                call    SSChk           ; Check for room on the syntax stack
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (StrLen), a     ; Length of the current string (plus 1)
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     ix, bc
+                call    SSChk           ; Check for room on the syntax stack
+                ret
+; End of function AC26
+; =============== S U B R O U T I N E =======================================
+; Zero pointer ToS
+AC27:
+                call    SSChk           ; (todo) Remove this
+                ld      hl, 0
+                ld      (pTmp1), hl
+                call    PushP           ; Pushes pointer in HL onto the stack
+                ret
+; End of function AC27
+; =============== S U B R O U T I N E =======================================
+; Outputs horizontal spacing (W ?x or R ?x)
+HSPC:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, ibcdTemp0
+                call    StrToBCD        ; Converts string on ToS to BCD in (HL)
+                ld      a, (hl)
+                and     11110000b
+                jp      nz, HSPCEnd
+                ld      hl, (pDevX)     ; X position (BCD5)
+                ld      de, ibcdTemp0
+                call    SCmp0           ; Compares two strings (sets BC=INTLN*257 first)
+                jp      c, HSPCEnd
+                jp      z, HSPCEnd
+                ld      de, ibcdTemp1
+                ld      hl, ibcdTemp0
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+                ld      hl, (pDevX)     ; X position (BCD5)
+                ld      de, ibcdTemp0
+                ex      de, hl
+                ld      c, 5
+                call    SbcdDEHL        ; Subtracts two C bytes long BCDs in (DE) and (HL)
+                                        ; result goes in (HL)
+                ld      hl, (pDevX)     ; X position (BCD5)
+                ld      de, ibcdTemp1
+                call    CopyIntDEHL     ; Copy INTLN bytes from (DE) to (HL) ; SetI
+HSPC1:
+                ld      hl, ibcdTemp0
+                ld      c, 5
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jp      z, HSPCEnd
+                ld      c, 5
+                call    DbcdHL          ; Decrements by 1 the C bytes long BCD in (HL)
+                ld      a, Blank        ; Space
+                ld      (tmpChar1), a
+                call    writeChar       ; Outputs the character on A to the current IODevice
+                jp      HSPC1
+; ---------------------------------------------------------------------------
+HSPCEnd:
+                ret
+; End of function HSPC
+; =============== S U B R O U T I N E =======================================
+; Sets bit 0 of bmActFlag
+SetAFb0:
+                ld      hl, bmActFL
+                ld      a, (hl)
+                or      00000001b
+                ld      (hl), a
+                ret
+; End of function SetAFb0
+; =============== S U B R O U T I N E =======================================
+; Body of ZSAVE command
+bczSave:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (pRtnName)  ; Pointer to the current routine name
+                ld      a, (hl)
+                or      a
+                jp      z, Error40      ; Routine is unnamed
+                call    PushSTR         ; Pushes a MStr into the stack
+                ld      a, (RoutinesDR) ; Default drive for routines (0-F)
+                ld      (Drive), a      ; Current disk drive
+                ld      a, 1
+                ld      (FCBType), a    ; 0:Global, 1:Routine, 2:File
+                call    FFirst          ; Find first file
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, bczSave1
+                ld      a, (bmFlag1)    ; bit0:String
+                                        ; bit1:Not
+                                        ; bit2:Dirty
+                                        ; bit4:Break
+                and     DIRTY
+                jp      z, bczSaveE
+                call    FDelete         ; Delete file
+bczSave1:                               ; Save routine
+                call    SaveRtn
+                ld      hl, bmFlag1     ; bit0:String
+                                        ; bit1:Not
+                                        ; bit2:Dirty
+                                        ; bit4:Break
+                ld      a, 11111011b    ; Marks routine buffer as clear
+                and     (hl)
+                ld      (hl), a
+bczSaveE:
+                ret
+; End of function bczSave
+; =============== S U B R O U T I N E =======================================
+; Convert expression to truth-value
+ExpToTV:
+                call    SSChk           ; Check for room on the syntax stack
+                call    ExprToNum       ; Convert expression to numeric value
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (N), a
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     ix, bc
+                call    SSChk           ; Check for room on the syntax stack
+                ld      (TPP), ix
+                ld      hl, (TPP)
+                ld      a, (hl)
+                cp      30h             ; '0'
+                jp      z, ExpToTV1
+                ld      a, 1            ; Return true
+                ld      (Case), a
+                ret
+; ---------------------------------------------------------------------------
+ExpToTV1:                               ; Return false
+                xor     a
+                ld      (Case), a
+                ret
+; End of function ExpToTV
+; =============== S U B R O U T I N E =======================================
+; Convert expression to integer
+ExprToInt:
+                call    SSChk           ; Check for room on the syntax stack
+                call    ExprToNum       ; Convert expression to numeric value
+                xor     a               ; It's an integer
+                ld      (tmpChar2), a
+                call    MkStr           ; Make number into a string
+                ret
+; End of function ExprToInt
+; =============== S U B R O U T I N E =======================================
+; Does nothing
+Null1:
+                ret
+; End of function Null1
+; =============== S U B R O U T I N E =======================================
+; Convert expression to numeric value
+ExprToNum:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, 1
+                ld      (tmpChar2), a
+                call    MkStr           ; Make number into a string
+                ret
+; End of function ExprToNum
+; =============== S U B R O U T I N E =======================================
+; Push a 1 in the stack
+PushOne:
+                ld      (ix+0), 1
+                inc     ix
+                ret
+; End of function PushOne
+; =============== S U B R O U T I N E =======================================
+; Body of $ASCII function
+bfAscii:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, 1
+                ld      (N), a
+                ld      a, (Result)     ; No integer
+                cp      FALSE
+                jp      z, bfAscii1
+                ld      hl, ibcdTemp0
+                call    StrToBCD        ; Converts string on ToS to BCD in (HL)
+                ld      a, (hl)
+                and     11110000b
+                jp      nz, bfAscii2
+                call    BCD5ToChar      ; Converts BCD5 in (HL) into char in A
+                ld      (N), a
+                ld      a, (Result)     ; Holds the result of called function
+                cp      FALSE
+                jp      z, bfAscii2
+                ld      a, (N)
+                or      a
+                jp      z, bfAscii2
+bfAscii1:
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (StrLen), a     ; Length of the current string (plus 1)
+                or      a
+                jp      z, bfAscii3
+                ld      hl, N
+                cp      (hl)
+                jp      c, bfAscii3
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     ix, bc
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, N
+                dec     (hl)
+                ld      (pTmp1), ix
+                ld      hl, (pTmp1)
+                ld      a, (N)
+                ld      c, a
+                ld      b, 0
+                add     hl, bc
+                ld      (pTmp1), hl
+                ld      a, (hl)
+                ld      (N), a
+                ld      a, (N)
+                call    CharToStr       ; Convert char in A to string and push it
+                ret
+; ---------------------------------------------------------------------------
+bfAscii2:
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (StrLen), a     ; Length of the current string (plus 1)
+bfAscii3:                               ; Length of the current string (plus 1)
+                ld      a, (StrLen)
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     ix, bc
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, Minus1      ; -1 in M string format
+                call    PushSTR         ; Pushes a MStr into the stack
+                ret
+; End of function bfAscii
+; =============== S U B R O U T I N E =======================================
+; View a list of local vars
+ShowVars:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (pSymbolTbl) ; Pointer to the symbol table
+                ld      de, 2
+                add     hl, de
+                ld      (pVar), hl      ; Points to a var in the symbol table
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, 5
+                or      a
+                sbc     hl, de
+                jp      z, ShowVarsE
+                ld      hl, (pVar)      ; Points to a var in the symbol table
+                ld      (PTR), hl
+                ld      de, 2
+                add     hl, de
+                ld      a, (hl)
+                ld      (SubFL), a      ; Set if variable has subscripts
+                inc     hl
+                ld      (pVar), hl      ; Points to a var in the symbol table
+                ld      a, (hl)
+                ld      (StrLen), a     ; Length of the current string (plus 1)
+                ld      (tmpChar2), a
+                ld      hl, tmpChar2
+                inc     (hl)
+ShowVars1:
+                ld      de, VarName
+                ld      hl, (pVar)      ; Points to a var in the symbol table
+                ld      a, (tmpChar2)
+                call    CopyAup         ; Copy A bytes from (HL)->(DE) up
+                ld      a, (SubFL)      ; Set if variable has subscripts
+                or      a
+                jp      nz, ShowVars2
+                ld      hl, (PTR)
+                ld      (pTmp1), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, (pTmp1)
+                add     hl, de
+                ld      de, 3
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      hl, VarName
+                ld      (pTmp5), hl
+                ld      hl, (pTmp1)
+                ex      de, hl
+                ld      hl, (pTmp5)
+                call    cpMString       ; Compare two M Strings in (DE) and (HL)
+                jp      nz, ShowVars3
+                ld      (pTmp5), hl
+                ex      de, hl
+                ld      (pTmp1), hl
+ShowVars2:
+                ld      (ix+0), Asterisk
+                inc     ix
+                jp      ShowVars4
+; ---------------------------------------------------------------------------
+ShowVars3:                              ; Space
+                ld      (ix+0), Blank
+                inc     ix
+ShowVars4:                              ; Points to a var in the symbol table
+                ld      hl, (pVar)
+                inc     hl
+                ld      (pVar), hl      ; Points to a var in the symbol table
+                ld      a, (StrLen)     ; Length of the current string (plus 1)
+                call    PushAnoZ        ; Pushes A long value from (HL) if A not zero
+                ld      (pVar), hl      ; Points to a var in the symbol table
+                ld      a, 14
+                ld      hl, StrLen      ; Length of the current string (plus 1)
+                sub     (hl)
+                ld      (I1), a
+ShowVars5:                              ; Space
+                ld      (ix+0), Blank
+                inc     ix
+                ld      hl, I1
+                dec     (hl)
+                ld      a, (I1)
+                or      a
+                jp      nz, ShowVars5
+                ld      (ix+0), 0Fh
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                call    Write
+                ld      a, (SubFL)      ; Set if variable has subscripts
+                or      a
+                jp      nz, ShowVars6
+                ld      (ix+0), Quotes  ; "
+                inc     ix
+                ld      (ix+0), 1
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                call    Write
+                ld      hl, (pVar)      ; Points to a var in the symbol table
+                call    PushSTR         ; Pushes a MStr into the stack
+                call    Write
+                ld      (ix+0), Quotes  ; "
+                inc     ix
+                ld      (ix+0), 1
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                call    Write
+ShowVars6:
+                call    PrintCRLF
+                ld      a, (SubFL)      ; Set if variable has subscripts
+                or      a
+                jp      z, ShowVars8
+ShowVars7:
+                ld      a, (ViewParam)
+                or      a
+                jp      z, ShowVars8
+                call    sub_67BD
+ShowVars8:
+                ld      hl, (PTR)
+                ld      (pVar), hl      ; Points to a var in the symbol table
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, (pVar)      ; Points to a var in the symbol table
+                add     hl, de
+                ld      (pVar), hl      ; Points to a var in the symbol table
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, 5
+                or      a
+                sbc     hl, de
+                jp      z, ShowVarsE
+                ld      hl, VarName
+                ld      (pTmp5), hl
+                ld      hl, (pVar)      ; Points to a var in the symbol table
+                ld      (PTR), hl
+                ld      de, 2
+                add     hl, de
+                ld      a, (hl)
+                ld      (SubFL), a      ; Set if variable has subscripts
+                inc     hl
+                ld      (pVar), hl      ; Points to a var in the symbol table
+                ld      a, (hl)
+                ld      (StrLen), a     ; Length of the current string (plus 1)
+                ld      (tmpChar2), a
+                ld      hl, tmpChar2
+                inc     (hl)
+                ld      hl, (pTmp5)
+                ex      de, hl
+                ld      hl, (pVar)      ; Points to a var in the symbol table
+                ld      a, (tmpChar2)
+                ld      c, a
+                call    cpCStr          ; Compare C bytes long strings in (DE) and (HL)
+                jr      nz, ShowVars9
+                ld      (pVar), hl      ; Points to a var in the symbol table
+                ex      de, hl
+                ld      (pTmp5), hl
+                jp      ShowVars7
+; ---------------------------------------------------------------------------
+ShowVars9:
+                jp      ShowVars1
+; ---------------------------------------------------------------------------
+ShowVarsE:
+                ret
+; End of function ShowVars
+; =============== S U B R O U T I N E =======================================
+; Body of $DATA function
+bfData:
+                call    SSChk           ; Check for room on the syntax stack
+                dec     ix
+                ld      a, (ix+0)
+                ld      (tmpChar2), a
+                call    sub_50CC
+                xor     a
+                ld      (II), a
+                ld      a, (tmpChar2)   ; Global or Local
+                cp      1
+                jp      nz, bfData4
+                call    sub_6A99
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, bfData1
+                ld      a, 1
+                ld      (II), a
+                ld      hl, (pTmp1)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, (pTmp1)
+                add     hl, de
+                ld      (pTmp1), hl
+bfData1:
+                call    sub_6A25
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, bfData3
+bfData2:
+                ld      a, (I5)
+                or      a
+                jp      nz, bfData3
+                ld      a, (II)
+                add     a, 0Ah
+                ld      (II), a
+bfData3:
+                ld      ix, (word_02A4)
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (II)
+                call    CharToStr       ; Convert char in A to string and push it
+                ret
+; ---------------------------------------------------------------------------
+bfData4:
+                call    sub_70A8
+                call    FindKey         ; Find place for a key
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, bfData3
+                call    sub_6CE3
+                ld      a, (Result)     ; Holds the result of called function
+                or      a
+                jp      z, bfData5
+                ld      a, 1
+                ld      (II), a
+                ld      hl, (pTmp1)
+                ld      c, (hl)
+                ld      b, 0
+                add     hl, bc
+                ld      (pTmp1), hl
+                ld      a, 0
+                ld      (Result), a     ; Holds the result of called function
+bfData5:
+                call    sub_71EA
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, bfData3
+                ld      a, (SubFL)      ; Set if variable has subscripts
+                ld      (I5), a
+                ld      hl, (word_A640)
+                ex      de, hl
+                ld      hl, (pTmp1)
+                call    sub_96C0
+                ld      (I5), a
+                ld      (pTmp10), hl
+                jp      bfData2
+; End of function bfData
+; =============== S U B R O U T I N E =======================================
+; Body of VIEW command
+bcView:
+                call    SSChk           ; Check for room on the syntax stack
+                call    StrToChar       ; Converts a string on ToS to char (0-255)
+                ld      (I1), a
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, Error20      ; Illegal expression
+                ld      a, (I1)
+                or      a
+                jp      nz, bcView1
+                xor     a
+                ld      (ViewParam), a
+                call    ShowVars        ; View a list of local vars
+                jp      cbViewE
+; ---------------------------------------------------------------------------
+bcView1:
+                ld      a, (I1)
+                cp      1
+                jp      nz, bcView2
+                ld      a, 1
+                ld      (ViewParam), a
+                call    ShowVars        ; View a list of local vars
+                jp      cbViewE
+; ---------------------------------------------------------------------------
+bcView2:
+                ld      a, (I1)
+                cp      2
+                jp      nz, bcView3
+                call    ShowGlb         ; View a list of globals
+                jp      cbViewE
+; ---------------------------------------------------------------------------
+bcView3:
+                ld      a, (I1)
+                cp      3
+                jp      nz, bcView4
+                ld      hl, mmpFCB      ; FCB for listing *.MMP (view 3)
+                ld      (pTmp2), hl
+                call    ShowFiles
+                jp      cbViewE
+; ---------------------------------------------------------------------------
+bcView4:
+                ld      a, (I1)
+                cp      4
+                jp      nz, Error30     ; Unimplemented operation
+                ld      hl, fileFCB     ; FCB for listing *.* (view 4)
+                ld      (pTmp2), hl
+                call    ShowFiles
+cbViewE:
+                ret
+; End of function bcView
+; =============== S U B R O U T I N E =======================================
+; Body of $EXTRACT function
+bfExtract:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (Case)
+                cp      1
+                jp      nz, bfExtract1
+                ld      de, ibcdTemp0
+                ld      hl, ibcdV1
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+                ld      a, 0
+                ld      (Result), a     ; Holds the result of called function
+                jp      bfExtract2
+; ---------------------------------------------------------------------------
+bfExtract1:
+                ld      hl, ibcdTemp0
+                call    StrToBCD        ; Converts string on ToS to BCD in (HL)
+bfExtract2:
+                ld      de, ibcdTemp1
+                ld      hl, ibcdTemp0
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, bfExtract3
+                ld      hl, ibcdTemp0
+                call    StrToBCD        ; Converts string on ToS to BCD in (HL)
+bfExtract3:
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (StrLen), a     ; Length of the current string (plus 1)
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     ix, bc
+                call    SSChk           ; Check for room on the syntax stack
+                ld      (pTmp1), ix
+                ld      hl, ibcdTemp2
+                ld      a, (StrLen)     ; Length of the current string (plus 1)
+                call    sub_9535
+                ld      hl, ibcdTemp0
+                ld      a, (hl)
+                and     11110000b
+                jp      nz, bfExtract4
+                ld      c, 5
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jp      z, bfExtract4
+                ld      hl, ibcdTemp1
+                ld      a, (hl)
+                and     11110000b
+                jp      nz, bfExtract7
+                jp      bfExtract5
+; ---------------------------------------------------------------------------
+bfExtract4:                             ; Holds the result of called function
+                ld      a, (Result)
+                or      a
+                jp      z, bfExtract7
+                ld      de, ibcdTemp0
+                ld      hl, ibcdV1
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+bfExtract5:
+                ld      hl, ibcdTemp2
+                ld      de, ibcdTemp1
+                call    SCmp0           ; Compares two strings (sets BC=INTLN*257 first)
+                jp      c, bfExtract6
+                ld      de, ibcdTemp1
+                ld      hl, ibcdTemp2
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+bfExtract6:
+                ld      hl, ibcdTemp0
+                ld      de, ibcdTemp1
+                call    SCmp0           ; Compares two strings (sets BC=INTLN*257 first)
+                jp      c, bfExtract7
+                call    BCD5ToChar      ; Converts BCD5 in (HL) into char in A
+                ld      (I1), a
+                ld      hl, ibcdTemp1
+                call    BCD5ToChar      ; Converts BCD5 in (HL) into char in A
+                ld      (I2), a
+                ld      hl, I1
+                dec     (hl)
+                ld      a, (I2)
+                sub     (hl)
+                ld      (I2), a
+                ld      hl, (pTmp1)
+                ld      a, (I1)
+                ld      c, a
+                ld      b, 0
+                add     hl, bc
+                ld      (pTmp1), hl
+                ld      (TPP), ix
+                ld      hl, (TPP)
+                ex      de, hl
+                ld      hl, (pTmp1)
+                ld      a, (I2)
+                call    ShiftDn         ; Shifts the stack towards its base
+bfExtractEnd:
+                ld      a, (I2)
+                ld      (ix+0), a
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                ret
+; ---------------------------------------------------------------------------
+bfExtract7:
+                xor     a
+                ld      (I2), a
+                jp      bfExtractEnd
+; End of function bfExtract
+; =============== S U B R O U T I N E =======================================
+; Body of $FIND function
+bfFind:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, bfFind2
+bfFind1:
+                ld      de, ibcdTemp0
+                ld      hl, ibcdV1
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+                jp      bfFind3
+; ---------------------------------------------------------------------------
+bfFind2:
+                ld      hl, ibcdTemp0
+                call    StrToBCD        ; Converts string on ToS to BCD in (HL)
+                ld      a, (hl)
+                and     11110000b
+                jp      nz, bfFind1
+                ld      c, 5
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jp      z, bfFind1
+bfFind3:
+                ld      hl, ibcdTemp0
+                call    BCD5ToChar      ; Converts BCD5 in (HL) into char in A
+                ld      (N), a
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, bfFind4
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (I2), a
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     ix, bc
+                call    SSChk           ; Check for room on the syntax stack
+                ld      (pTmp3), ix
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (I1), a
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     ix, bc
+                call    SSChk           ; Check for room on the syntax stack
+                ld      (pTmp2), ix
+                ld      a, (I2)
+                or      a
+                jp      z, bfFindEnd
+                ld      a, (I1)
+                ld      hl, N
+                cp      (hl)
+                jp      c, bfFind5
+                ld      hl, N
+                dec     (hl)
+                ld      hl, (pTmp2)
+                ld      a, (N)
+                ld      c, a
+                ld      b, 0
+                add     hl, bc
+                ld      (pTmp2), hl
+                ld      a, (I1)
+                ld      hl, N
+                sub     (hl)
+                ld      (I1), a
+                ld      hl, (pTmp3)
+                ex      de, hl
+                ld      hl, (pTmp2)
+                ld      b, a
+                ld      a, (I2)
+                call    sub_95A6
+                ld      (pTmp2), hl
+                ld      (I3), a
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, bfFind5
+                ld      hl, ibcdTemp1
+                ld      a, (I3)
+                call    sub_9535
+                ld      hl, ibcdTemp0
+                ld      de, ibcdTemp1
+                ld      c, 5
+                call    AbcdDEHL        ; Adds two C bytes long BCDs in (DE) and (HL)
+                                        ; result goes in (HL)
+                jp      bfFindEnd
+; ---------------------------------------------------------------------------
+bfFind4:
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (I2), a
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     ix, bc
+                call    SSChk           ; Check for room on the syntax stack
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (I2), a
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     ix, bc
+                call    SSChk           ; Check for room on the syntax stack
+bfFind5:
+                ld      de, ibcdTemp0
+                ld      hl, ibcdV0
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+bfFindEnd:
+                ld      hl, ibcdTemp0
+                call    BCD5ToStr       ; Convert BCD5 in (HL) to string and push it
+                ret
+; End of function bfFind
+; =============== S U B R O U T I N E =======================================
+; Body of $LENGTH function
+bfLength:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, bfLength2
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (StrLen), a     ; Length of the current string (plus 1)
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     ix, bc
+                call    SSChk           ; Check for room on the syntax stack
+bfLength1:                              ; Length of the current string (plus 1)
+                ld      a, (StrLen)
+                call    CharToStr       ; Convert char in A to string and push it
+                ret
+; ---------------------------------------------------------------------------
+bfLength2:
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (I2), a
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     ix, bc
+                call    SSChk           ; Check for room on the syntax stack
+                ld      (pTmp3), ix
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (I1), a
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     ix, bc
+                call    SSChk           ; Check for room on the syntax stack
+                ld      (pTmp2), ix
+                xor     a
+                ld      (StrLen), a     ; Length of the current string (plus 1)
+                ld      a, (I2)
+                or      a
+                jp      z, bfLength1
+bfLength3:
+                ld      hl, (pTmp3)
+                ex      de, hl
+                ld      hl, (pTmp2)
+                ld      a, (I1)
+                ld      b, a
+                ld      a, (I2)
+                call    sub_95A6
+                ld      (pTmp2), hl
+                ld      (I3), a
+                ld      hl, StrLen      ; Length of the current string (plus 1)
+                inc     (hl)
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, bfLength1
+                ld      a, (I1)
+                ld      hl, I3
+                sub     (hl)
+                ld      (I1), a
+                jp      bfLength3
+; End of function bfLength
+; =============== S U B R O U T I N E =======================================
+sub_31CA:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, bmFlag1     ; bit0:String
+                                        ; bit1:Not
+                                        ; bit2:Dirty
+                                        ; bit4:Break
+                ld      a, 11111101b
+                and     (hl)
+                ld      (hl), a
+                call    sub_50FE
+                ld      hl, (pTmp1)
+                ld      a, (hl)
+                ld      (I6), a
+                ld      (pTmp3), hl
+                cp      32h             ; '2'
+                jp      c, loc_31F5
+                ld      hl, bmFlag1     ; bit0:String
+                                        ; bit1:Not
+                                        ; bit2:Dirty
+                                        ; bit4:Break
+                ld      a, (hl)
+                or      NOTFL
+                ld      (hl), a
+                ld      a, (I6)
+                sub     32h             ; '2'
+                ld      (I6), a
+loc_31F5:
+                ld      a, 0Eh
+                ld      hl, I6
+                cp      (hl)
+                jp      c, loc_3204
+                call    ExprToNum       ; Convert expression to numeric value
+                jp      loc_3207
+; ---------------------------------------------------------------------------
+loc_3204:                               ; Does nothing
+                call    Null1
+loc_3207:
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (I2), a
+                ld      hl, (pTmp3)
+                ld      (pTmp2), hl
+                inc     hl
+                ld      (pTmp3), hl
+                ld      hl, (pTmp2)
+                dec     hl
+                dec     hl
+                ld      a, (hl)
+                ld      (I1), a
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     hl, bc
+                ld      (pTmp2), hl
+                ld      a, 0Eh
+                ld      hl, I6
+                cp      (hl)
+                jp      c, loc_3273
+                ld      ix, (pTmp2)
+                call    SSChk           ; Check for room on the syntax stack
+                call    NumOP
+                ret
+; ---------------------------------------------------------------------------
+loc_3241:                               ; bit0:String
+                ld      a, (bmFlag1)    ; bit1:Not
+                                        ; bit2:Dirty
+                                        ; bit4:Break
+                and     NOTFL
+                jp      nz, loc_3259
+loc_3249:                               ; '1'
+                ld      a, 31h
+                ld      (tmpChar1), a
+                jp      loc_325E
+; ---------------------------------------------------------------------------
+loc_3251:                               ; bit0:String
+                ld      a, (bmFlag1)    ; bit1:Not
+                                        ; bit2:Dirty
+                                        ; bit4:Break
+                and     NOTFL
+                jp      nz, loc_3249
+loc_3259:                               ; '0'
+                ld      a, 30h
+                ld      (tmpChar1), a
+loc_325E:
+                ld      a, (tmpChar1)
+                ld      (ix+0), a
+                inc     ix
+                ld      (ix+0), 1
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                ret
+; ---------------------------------------------------------------------------
+loc_3273:
+                ld      a, (I6)
+                cp      12h
+                jp      z, loc_32ED
+                ld      ix, (pTmp2)
+                call    SSChk           ; Check for room on the syntax stack
+                cp      0Fh
+                jp      nz, loc_32A9
+                ld      hl, (pTmp3)
+                ex      de, hl
+                ld      hl, (pTmp2)
+                ld      a, (I1)
+                ld      b, a
+                ld      a, (I2)
+                call    sub_95A6
+                ld      (pTmp2), hl
+                ld      (I3), a
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      nz, loc_3241
+                jp      loc_3251
+; ---------------------------------------------------------------------------
+loc_32A9:
+                ld      a, (I6)
+                cp      10h
+                jp      nz, loc_32C9
+                ld      hl, (pTmp3)
+                ex      de, hl
+                ld      hl, (pTmp2)
+                ld      a, (I2)
+                ld      c, a
+                ld      a, (I1)
+                ld      b, a
+                call    SCmp            ; Compares two strings
+                jp      c, loc_3241
+                jp      loc_3251
+; ---------------------------------------------------------------------------
+loc_32C9:
+                ld      a, (I1)
+                ld      hl, I2
+                cp      (hl)
+                jp      nz, loc_3251
+                ld      hl, (pTmp2)
+                ex      de, hl
+                ld      hl, (pTmp3)
+                ld      c, a
+                call    cpCStr          ; Compare C bytes long strings in (DE) and (HL)
+                jr      nz, loc_32EA
+                ld      (pTmp3), hl
+                ex      de, hl
+                ld      (pTmp2), hl
+                jp      loc_3241
+; ---------------------------------------------------------------------------
+loc_32EA:
+                jp      loc_3251
+; ---------------------------------------------------------------------------
+loc_32ED:
+                ld      hl, ibcdTemp0
+                ld      a, (I1)
+                call    sub_9535
+                ld      hl, ibcdTemp1
+                ld      a, (I2)
+                call    sub_9535
+                ld      hl, ibcdTemp0
+                ld      de, ibcdTemp1
+                ld      c, 5
+                call    AbcdDEHL        ; Adds two C bytes long BCDs in (DE) and (HL)
+                                        ; result goes in (HL)
+                call    BCD5ToChar      ; Converts BCD5 in (HL) into char in A
+                ld      (N), a
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, Error11      ; String too long
+                ld      hl, (pTmp3)
+                ld      bc, -3
+                add     hl, bc
+                ld      (pTmp2), hl
+                ex      de, hl
+                ld      hl, (pTmp3)
+                ld      a, (I2)
+                call    ShiftDn         ; Shifts the stack towards its base
+                ld      a, (N)
+                ld      (ix+0), a
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                ret
+; End of function sub_31CA
+; =============== S U B R O U T I N E =======================================
+bczOption:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (RoutinesDR) ; Default drive for routines (0-F)
+                add     a, 41h          ; 'A'
+                ld      (RDrLetter), a
+                ld      hl, sRoutinesOn
+                call    PushSTR         ; Pushes a MStr into the stack
+                call    Write
+                call    PrintCRLF
+                ld      a, (GlobalsDR)  ; Default drive for globals (0-F)
+                add     a, 41h          ; 'A'
+                ld      (GDrLetter), a
+                ld      hl, sGlobalsOn
+                call    PushSTR         ; Pushes a MStr into the stack
+                call    Write
+                call    PrintCRLF
+                ret
+; End of function bczOption
+; =============== S U B R O U T I N E =======================================
+sub_3367:
+                call    SSChk           ; Check for room on the syntax stack
+                call    sub_52E3
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, loc_3379
+                xor     a
+                ld      (byte_0546), a
+loc_3379:
+                ld      ix, (word_050E)
+                call    SSChk           ; Check for room on the syntax stack
+                ld      de, (word_050E)
+                ld      hl, (word_050C)
+                ld      a, (byte_0546)
+                call    CopyAup         ; Copy A bytes from (HL)->(DE) up
+                ld      a, (byte_0546)
+                ld      c, a
+                ld      b, 0
+                add     ix, bc
+                call    SSChk           ; Check for room on the syntax stack
+                ld      (ix+0), a
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                ret
+; End of function sub_3367
+; =============== S U B R O U T I N E =======================================
+; Body of $CHAR function
+bfChar:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, ibcdTemp0
+                call    StrToBCD        ; Converts string on ToS to BCD in (HL)
+                dec     ix
+                ld      a, (ix+0)
+                ld      (Count), a
+                ld      a, (hl)
+                and     11110000b
+                jp      nz, bfCharEnd
+                call    BCD5ToChar      ; Converts BCD5 in (HL) into char in A
+                ld      (N), a
+                ld      hl, Count
+                inc     (hl)
+                ld      a, (N)
+                ld      (ix+0), a
+                inc     ix
+bfCharEnd:
+                ld      a, (Count)
+                ld      (ix+0), a
+                inc     ix
+                ret
+; End of function bfChar
+; =============== S U B R O U T I N E =======================================
+; Set values
+AC47:
+                call    SSChk           ; Check for room on the syntax stack
+                xor     a
+                ld      (STCnt), a
+                ld      a, (SetFL)
+                cp      1
+                jp      z, AC471
+                ld      a, (VariableFL) ; 0 - Function : 1 - Variable
+                or      a
+                jp      nz, Error18     ; Illegal character
+                ld      a, 1
+                ld      (STCnt), a
+                ld      hl, (pTmp1)
+                ld      bc, -2          ; -(PTRLEN)
+                add     hl, bc
+                ld      (pTmp1), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (pIndex), hl
+                ld      de, (pIndex)
+                ld      hl, (pTmp1)
+                or      a
+                sbc     hl, de
+                ld      (pTmp1), hl
+                ld      (SetBs), hl
+AC471:
+                ld      hl, (word_A049)
+                ld      de, 0
+                or      a
+                sbc     hl, de
+                jp      nz, AC4719
+                ld      hl, (SetBs)
+                ld      a, (hl)
+                cp      Dollar
+                jp      z, AC4721
+                xor     a
+                ld      (NR), a
+                ld      (pTmp1), ix
+                ld      hl, (pTmp1)
+                dec     hl
+                dec     hl
+                ld      a, (hl)
+                ld      (byte_A694), a
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     hl, bc
+                ld      (pTmp1), hl
+                ld      (word_02F4), hl
+                dec     hl
+                ld      (pTmp1), hl
+                ld      a, (byte_A6A4)
+                cp      1
+                jp      nz, AC475
+                ld      a, 1
+                ld      (byte_0549), a
+                call    sub_5198
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, AC474
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (I2), a
+                ld      hl, ibcdTemp1
+                call    sub_9535
+                ld      a, (byte_A694)
+                ld      hl, byte_0546
+                cp      (hl)
+                jp      c, AC472
+                ld      hl, byte_0546
+                sub     (hl)
+                ld      (I3), a
+                ld      hl, ibcdTemp2
+                call    sub_9535
+                ld      hl, ibcdTemp1
+                ld      de, ibcdTemp2
+                ld      c, 5
+                call    AbcdDEHL        ; Adds two C bytes long BCDs in (DE) and (HL)
+                                        ; result goes in (HL)
+                call    BCD5ToChar      ; Converts BCD5 in (HL) into char in A
+                ld      (I2), a
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, Error11      ; String too long
+                ld      hl, (word_050A)
+                ld      a, (I3)
+                ld      c, a
+                ld      b, 0
+                add     hl, bc
+                ld      (pTmp4), hl
+                ex      de, hl
+                ld      hl, (word_050A)
+                ld      a, (byte_0547)
+                call    ShiftUp         ; Shifts the stack towards its top
+                ld      de, (word_050C)
+                ld      hl, (word_02F4)
+                ld      a, (byte_A694)
+                call    CopyAup         ; Copy A bytes from (HL)->(DE) up
+                jp      AC473
+; ---------------------------------------------------------------------------
+AC472:
+                ld      de, (word_050C)
+                ld      hl, (word_02F4)
+                ld      a, (byte_A694)
+                call    CopyAup         ; Copy A bytes from (HL)->(DE) up
+                ld      hl, (word_050C)
+                ld      a, (byte_A694)
+                ld      c, a
+                ld      b, 0
+                add     hl, bc
+                ld      (word_050C), hl
+                ld      a, (byte_0546)
+                ld      hl, byte_A694
+                sub     (hl)
+                ld      (byte_0546), a
+                ld      a, (I2)
+                ld      hl, byte_0546
+                sub     (hl)
+                ld      (I2), a
+                ld      hl, (word_050C)
+                ex      de, hl
+                ld      hl, (word_050A)
+                ld      a, (byte_0547)
+                call    ShiftDn         ; Shifts the stack towards its base
+AC473:
+                ld      a, (I2)
+                ld      (ix+0), a
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+AC474:
+                xor     a
+                ld      (byte_0549), a
+                ld      (byte_A6A4), a
+                jp      AC471
+; ---------------------------------------------------------------------------
+AC475:
+                ld      a, (STCnt)
+                or      a
+                jp      nz, AC476
+                ld      hl, (pTmp1)
+                ld      a, (hl)
+                ld      (STCnt), a
+AC476:
+                ld      hl, (SetBs)
+                ld      (pTmp1), hl
+AC477:
+                ld      hl, (pTmp1)
+                ld      a, (hl)
+                ld      (SubFL), a      ; Set if variable has subscripts
+                inc     hl
+                ld      (pTmp1), hl
+                ld      (word_02F2), hl
+                ld      a, (hl)
+                ld      (NameLen), a    ; Length of the current variable name
+                xor     a
+                ld      (I1), a
+                ld      a, (NameLen)    ; Length of the current variable name
+                and     10000000b
+                jp      z, AC478
+                ld      a, 1
+                ld      (I1), a
+                ld      hl, NameLen     ; Length of the current variable name
+                ld      a, 01111111b
+                and     (hl)
+                ld      (hl), a
+                ld      hl, (pTmp1)
+                ld      a, (NameLen)    ; Length of the current variable name
+                ld      (hl), a
+AC478:
+                ld      hl, (pTmp1)
+                ld      c, (hl)
+                ld      b, 0
+                add     hl, bc
+                inc     hl
+                ld      (pTmp1), hl
+                ld      (word_A640), hl
+                ld      a, (SubFL)      ; Set if variable has subscripts
+                ld      (tmpChar2), a
+                ld      a, 3
+                ld      (byte_A695), a
+AC479:
+                ld      a, (tmpChar2)
+                or      a
+                jp      z, AC4710
+                ld      hl, (pTmp1)
+                ld      a, (hl)
+                ld      (I4), a
+                ld      a, (byte_A695)
+                ld      hl, I4
+                add     a, (hl)
+                ld      (byte_A695), a
+                ld      hl, byte_A695
+                inc     (hl)
+                ld      hl, (pTmp1)
+                ld      a, (I4)
+                ld      c, a
+                ld      b, 0
+                add     hl, bc
+                inc     hl
+                ld      (pTmp1), hl
+                ld      hl, tmpChar2
+                dec     (hl)
+                jp      AC479
+; ---------------------------------------------------------------------------
+AC4710:
+                ld      hl, (pTmp1)
+                ld      (word_029A), hl
+                ld      a, (I1)
+                cp      1
+                jp      z, AC4716
+                ld      a, (byte_A695)
+                ld      hl, NameLen     ; Length of the current variable name
+                add     a, (hl)
+                ld      (byte_A695), a
+                ld      hl, byte_A695
+                inc     (hl)
+                call    sub_6A99
+                ld      hl, (word_02F2)
+                dec     hl
+                ld      (word_02F2), hl
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, AC4712
+                ld      hl, (pVar)      ; Points to a var in the symbol table
+                ld      (pTmp2), hl
+                ld      a, (byte_A694)
+                cp      (hl)
+                jp      nz, AC4711
+                call    sub_6C12
+                jp      AC4713
+; ---------------------------------------------------------------------------
+AC4711:
+                call    sub_6B28
+AC4712:
+                call    sub_6B6F
+AC4713:
+                ld      hl, STCnt
+                dec     (hl)
+                ld      hl, (word_029A)
+                ld      (pTmp1), hl
+                ld      a, (STCnt)
+                or      a
+                jp      nz, AC477
+                ld      ix, (SetBs)
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (SetFL)
+                or      a
+                jp      z, AC4714
+                xor     a
+                ld      (SetFL), a
+                ret
+; ---------------------------------------------------------------------------
+AC4714:
+                ld      a, (ReadFL)
+                cp      1
+                jp      z, AC4715
+                ld      ix, (NSTOS)
+                call    SSChk           ; Check for room on the syntax stack
+AC4715:
+                ret
+; ---------------------------------------------------------------------------
+AC4716:
+                call    sub_70A8
+                call    FindKey         ; Find place for a key
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, AC4717
+                call    sub_784E
+AC4717:
+                call    sub_6CE3
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, AC4718
+                call    sub_6C8A
+AC4718:
+                xor     a
+                ld      (byte_A69A), a
+                call    sub_7EF7
+                ld      hl, (word_A648)
+                ld      de, -7          ; FFF9
+                add     hl, de
+                jp      nc, Error50     ; Running out of global space
+                jp      AC4713
+; ---------------------------------------------------------------------------
+AC4719:
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (StrLen), a     ; Length of the current string (plus 1)
+                ld      a, 30
+                ld      hl, StrLen      ; Length of the current string (plus 1)
+                cp      (hl)
+                jp      c, Error20      ; Illegal expression
+                ld      hl, (word_A049)
+                ld      a, (StrLen)     ; Length of the current string (plus 1)
+                ld      (hl), a
+                inc     hl
+                ld      (word_A049), hl
+                call    sub_9782
+                ld      hl, 0
+                ld      (word_A049), hl
+                ld      a, (StrLen)     ; Length of the current string (plus 1)
+                ld      (byte_A6A3), a
+AC4720:
+                xor     a
+                ld      (SetFL), a
+                ret
+; ---------------------------------------------------------------------------
+AC4721:
+                ld      hl, ibcdTemp0
+                call    StrToBCD        ; Converts string on ToS to BCD in (HL)
+                dec     ix
+                ld      a, (ix+0)
+                ld      (tmpChar2), a
+                dec     ix
+                ld      a, 1
+                ld      hl, IODevice    ; Current IO device
+                cp      (hl)
+                jp      c, AC4720
+                ld      a, (tmpChar2)
+                cp      59h             ; 'Y'
+                jp      z, AC4722
+                ld      hl, (pDevX)     ; X position (BCD5)
+                ld      de, ibcdTemp0
+                call    CopyIntDEHL     ; Copy INTLN bytes from (DE) to (HL) ; SetI
+                jp      AC4720
+; ---------------------------------------------------------------------------
+AC4722:                                 ; Y position (BCD5)
+                ld      hl, (pDevY)
+                ld      de, ibcdTemp0
+                call    CopyIntDEHL     ; Copy INTLN bytes from (DE) to (HL) ; SetI
+                jp      AC4720
+; End of function AC47
+; =============== S U B R O U T I N E =======================================
+; Body of BREAK command
+bcBreak:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (Case)
+                cp      1
+                jp      nz, bcBreak2
+                ld      (pTmp1), ix
+                ld      hl, (pTmp1)
+                dec     hl
+                dec     hl
+                ld      (pTmp1), hl
+                ld      a, (hl)
+                ld      (tmpChar2), a
+                cp      1
+                jp      nz, bcBreak2
+                dec     hl
+                ld      (pTmp1), hl
+                ld      a, (hl)
+                ld      (tmpChar2), a
+                cp      30h             ; '0'
+                jp      z, bcBreak1
+                cp      31h             ; '1'
+                jp      nz, bcBreak2
+bcBreak1:
+                ld      a, (tmpChar2)
+                sub     30h             ; '0'
+                ld      (bBreakVal), a  ; Value passed to BREAK command
+                ld      ix, (pTmp1)
+                call    SSChk           ; Check for room on the syntax stack
+                jp      bcBreakEnd
+; ---------------------------------------------------------------------------
+bcBreak2:
+                ld      a, (Mode)
+                cp      1
+                jp      z, bcBreakEnd
+                call    putCrLf         ; Outputs a CrLf
+                ld      hl, sBreak
+                call    putStr          ; Outputs 0x00 terminated string in (HL)
+                xor     a
+                ld      (DeviceInUse), a
+                call    DevPrepare      ; Prepares current device for use
+                ld      a, (Case)
+                cp      1
+                jp      nz, bcBreak3
+                call    Write
+bcBreak3:                               ; Outputs a CrLf
+                call    putCrLf
+                ld      a, 1
+                ld      (Auto), a
+bcBreakEnd:
+                ret
+; End of function bcBreak
+; =============== S U B R O U T I N E =======================================
+; Body of ZGO command
+bczGo:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (Mode)
+                cp      1
+                jp      nz, bczGoEnd
+                ld      a, (BreakFL)    ; 1=On Break
+                or      a
+                jp      z, bczGoEnd
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (tmpChar2), a
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     ix, bc
+                call    SSChk           ; Check for room on the syntax stack
+                dec     ix
+                ld      a, (ix+0)
+                ld      (DeviceInUse), a
+                dec     ix
+                ld      a, (ix+0)
+                ld      (Mode), a
+                dec     ix
+                ld      a, (ix+0)
+                ld      (DoSW), a
+                dec     ix
+                ld      a, (ix+0)
+                ld      (IndSW), a
+                dec     ix
+                ld      a, (ix+0)
+                ld      (ForSW), a
+                dec     ix
+                ld      a, (ix+0)
+                ld      (IndFL), a      ; Indirection flag
+                call    sub_5555
+                call    DevPrepare      ; Prepares current device for use
+                ld      a, (DeviceInUse)
+                ld      (IODevice), a   ; Current IO device
+                ld      hl, (Index)
+                dec     hl
+                ld      (Index), hl
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                ld      hl, BreakFL     ; 1=On Break
+                dec     (hl)
+                xor     a
+                ld      (bmFlag), a
+                ld      a, (Token)
+                cp      tknCRLF         ; Is it CR or LF?
+                jp      nz, bczGoEnd
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000010b
+                ld      (hl), a
+bczGoEnd:
+                ret
+; End of function bczGo
+; =============== S U B R O U T I N E =======================================
+; Body of $NEXT and $ORDER functions
+bfNxtOrd:
+                call    SSChk           ; Check for room on the syntax stack
+                dec     ix
+                ld      a, (ix+0)
+                ld      (tmpChar2), a
+                call    sub_50CC
+                ld      a, (SubFL)      ; Set if variable has subscripts
+                or      a
+                jp      z, Error46      ; Subscript missing
+                ld      (I1), a
+                ld      hl, (word_02F2)
+                ld      a, (NameLen)    ; Length of the current variable name
+                ld      c, a
+                ld      b, 0
+                add     hl, bc
+                inc     hl
+                ld      (pTmp1), hl
+loc_37DC:
+                ld      a, (I1)
+                cp      1
+                jp      z, loc_37F6
+                ld      hl, (pTmp1)
+                ld      c, (hl)
+                ld      b, 0
+                add     hl, bc
+                inc     hl
+                ld      (pTmp1), hl
+                ld      hl, I1
+                dec     (hl)
+                jp      loc_37DC
+; ---------------------------------------------------------------------------
+loc_37F6:
+                ld      hl, (pTmp1)
+                inc     (hl)
+                ld      (ix+0), 0
+                inc     ix
+                ld      a, (tmpChar2)
+                cp      1
+                jp      nz, loc_3873
+                call    sub_6A99
+                call    sub_6A25
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, loc_3838
+                ld      a, 1
+                ld      hl, I5
+                cp      (hl)
+                jp      c, loc_3838
+loc_381F:
+                ld      ix, (word_02A4)
+                call    SSChk           ; Check for room on the syntax stack
+                call    sub_5861
+loc_3829:
+                ld      a, (tmpChar2)
+                ld      (ix+0), a
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                ret
+; ---------------------------------------------------------------------------
+loc_3838:
+                ld      ix, (word_02A4)
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (bFlagOrder)
+                cp      1
+                jp      z, loc_385B
+                ld      (ix+0), Minus
+                inc     ix
+                ld      (ix+0), 31h     ; '1'
+                inc     ix
+                ld      a, 2
+                ld      (tmpChar2), a
+                jp      loc_3829
+; ---------------------------------------------------------------------------
+loc_385B:
+                xor     a
+                ld      (tmpChar2), a
+                jp      loc_3829
+; ---------------------------------------------------------------------------
+                ld      hl, (pVar)      ; (todo) Check this
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      de, 9
+                add     hl, de
+                ld      (pTmp4), hl
+                jp      loc_37DC
+; ---------------------------------------------------------------------------
+loc_3873:
+                call    sub_70A8
+                call    FindKey         ; Find place for a key
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, loc_3838
+                call    sub_6CE3
+                ld      hl, (pTmp1)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, 0
+                or      a
+                sbc     hl, de
+                jp      z, loc_38A5
+                ld      a, 1
+                ld      hl, I5
+                cp      (hl)
+                jp      c, loc_3838
+                ld      hl, (pTmp10)
+                ld      (pVar), hl      ; Points to a var in the symbol table
+                jp      loc_381F
+; ---------------------------------------------------------------------------
+loc_38A5:
+                call    sub_71EA
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, loc_3838
+                ld      hl, (word_A640)
+                ex      de, hl
+                ld      hl, (pTmp1)
+                ld      a, (SubFL)      ; Set if variable has subscripts
+                call    sub_96C0
+                ld      (SubFL), a      ; Set if variable has subscripts
+                ld      (pVar), hl      ; Points to a var in the symbol table
+                ld      a, 1
+                ld      hl, SubFL       ; Set if variable has subscripts
+                cp      (hl)
+                jp      c, loc_3838
+                jp      loc_381F
+; End of function bfNxtOrd
+; =============== S U B R O U T I N E =======================================
+; Set value in for
+AC51:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (Vptr)
+                ld      (pTmp1), hl
+                ld      de, 2
+                add     hl, de
+                ld      (NSTOS), hl
+                call    AC47            ; Set values
+                ld      (ix+0), 0
+                inc     ix
+                ret
+; End of function AC51
+; =============== S U B R O U T I N E =======================================
+; Body of $RANDOM function
+bfRandom:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, ibcdTemp0
+                call    StrToBCD        ; Converts string on ToS to BCD in (HL)
+                ld      a, (hl)
+                and     11110000b
+                jp      nz, Error20     ; Illegal expression
+                ld      c, 5
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jp      z, Error20      ; Illegal expression
+                call    MakeRandom      ; Makes a random number and pushes onto the stack
+                ret
+; End of function bfRandom
+; =============== S U B R O U T I N E =======================================
+; Writes *n
+WriteAst:
+                call    SSChk           ; Check for room on the syntax stack
+                call    StrToChar       ; Converts a string on ToS to char (0-255)
+                ld      (tmpChar2), a
+                ld      (ix+0), a
+                inc     ix
+                ld      (ix+0), 1
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                call    Write
+                ret
+; End of function WriteAst
+; =============== S U B R O U T I N E =======================================
+Write:
+                call    SSChk           ; Check for room on the syntax stack
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (Count), a
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     ix, bc
+                call    SSChk           ; Check for room on the syntax stack
+                ld      (pTmp1), ix
+                ld      a, (Count)
+                ld      (tmpChar2), a
+Write1:
+                ld      a, (tmpChar2)
+                or      a
+                jp      z, Write2
+                ld      hl, (pTmp1)
+                ld      a, (hl)
+                ld      (tmpChar1), a
+                call    writeChar       ; Outputs the character on A to the current IODevice
+                ld      hl, tmpChar2
+                dec     (hl)
+                ld      hl, (pTmp1)
+                inc     hl
+                ld      (pTmp1), hl
+                jp      Write1
+; ---------------------------------------------------------------------------
+Write2:
+                ld      hl, ibcdTemp0
+                ld      a, (Count)
+                call    sub_9535
+                ld      hl, (pDevX)     ; X position (BCD5)
+                ld      de, ibcdTemp0
+                ld      c, 5
+                call    AbcdDEHL        ; Adds two C bytes long BCDs in (DE) and (HL)
+                                        ; result goes in (HL)
+                ret
+; End of function Write
+; =============== S U B R O U T I N E =======================================
+bcHalt:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (bmFlag1)    ; bit0:String
+                                        ; bit1:Not
+                                        ; bit2:Dirty
+                                        ; bit4:Break
+                and     DIRTY
+                jp      nz, Error42     ; Remove or save routine
+bcHalt2:                                ; Close GLobals
+                call    GLBClose
+                ld      a, (DoSW)       ; Are we inside a DO command?
+                or      a
+                jp      nz, PrintErr18  ; Yes.
+                ld      a, (IndSW)      ; Are we inside an indirection?
+                or      a
+                jp      nz, PrintErr18  ; Yes.
+                jp      GameOver        ; Terminate execution
+; End of function bcHalt
+; =============== S U B R O U T I N E =======================================
+; Sets bit 1 of bmActFlag
+SetAFb1:
+                ld      hl, bmActFL
+                ld      a, (hl)
+                or      00000010b
+                ld      (hl), a
+                ret
+; End of function SetAFb1
+; =============== S U B R O U T I N E =======================================
+; Move the contents of (case) to (ifsw)
+CaseToIfSW:
+                ld      a, (Case)
+                ld      (IfSW), a
+                ret
+; End of function CaseToIfSW
+; =============== S U B R O U T I N E =======================================
+; Body of IF command
+bcIf:
+                ld      a, (IfSW)
+                or      a
+                jp      nz, bcIf1
+                ld      hl, bmActFL
+                ld      a, (hl)
+                or      00000010b
+                ld      (hl), a
+bcIf1:
+                ret
+; End of function bcIf
+; =============== S U B R O U T I N E =======================================
+; Body of ELSE command
+bcElse:
+                ld      a, (IfSW)
+                cp      1
+                jp      nz, bcElseE
+                ld      hl, bmActFL
+                ld      a, (hl)
+                or      00000010b
+                ld      (hl), a
+bcElseE:
+                ret
+; End of function bcElse
+; =============== S U B R O U T I N E =======================================
+; Body of HANG command
+bcHang:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, HangTime
+                call    StrToBCD        ; Converts string on ToS to BCD in (HL)
+                ld      a, (hl)
+                and     11110000b
+                jp      nz, bcHangE
+                ld      c, 5
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jp      z, bcHangE
+                ld      a, 0
+                ld      (Time), a
+                ld      a, 1
+                ld      (Wait), a
+                call    WasteTime       ; Waste time for the Hang command
+                xor     a
+                ld      (Wait), a
+bcHangE:
+                ret
+; End of function bcHang
+; =============== S U B R O U T I N E =======================================
+; Clears the symbol table
+KillAll:
+                ld      hl, (pEnd)
+                ld      bc, -2
+                add     hl, bc
+                ld      (pSymbolTbl), hl ; Pointer to the symbol table
+                ld      de, 0
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, 0
+                ld      (SymCount), hl  ; Number of symbols defined
+                ret
+; End of function KillAll
+; =============== S U B R O U T I N E =======================================
+; Mark for exclusive kill
+AC62:
+                call    SSChk           ; Check for room on the syntax stack
+                call    IXtoHL          ; Loads the value in (IX) into HL
+                ld      (pIndex), hl
+                ld      (word_02F2), ix
+                ld      de, (pIndex)
+                ld      hl, (word_02F2)
+                or      a
+                sbc     hl, de
+                ld      (word_02F2), hl
+                ld      a, (hl)
+                ld      (SubFL), a      ; Set if variable has subscripts
+                or      a
+                jp      z, AC621
+                call    AC76            ; Unmark symbol table after exclusive kill
+                jp      Error23         ; Illegal variable name
+; ---------------------------------------------------------------------------
+AC621:
+                ld      ix, (word_02F2)
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (word_02F2)
+                inc     hl
+                ld      (word_02F2), hl
+                ld      a, (hl)
+                ld      (NameLen), a    ; Length of the current variable name
+                call    sub_6A99
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, AC623
+AC622:
+                ld      a, 1
+                ld      (KillFL), a
+                ld      hl, (pTmp1)
+                ld      de, 2
+                add     hl, de
+                ld      (pTmp2), hl
+                ld      a, (hl)
+                or      10000000b
+                ld      (hl), a
+                ld      hl, (pTmp1)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, (pTmp1)
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, 5
+                or      a
+                sbc     hl, de
+                jp      z, AC624
+AC623:
+                call    sub_6A25
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, AC624
+                ld      a, (I5)
+                or      a
+                jp      z, AC622
+AC624:
+                ret
+; End of function AC62
+; =============== S U B R O U T I N E =======================================
+; Kill exclusive of marked variables
+AC63:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (KillFL)
+                or      a
+                jp      nz, AC631
+                call    KillAll         ; Clears the symbol table
+                ret
+; ---------------------------------------------------------------------------
+AC631:                                  ; Pointer to the symbol table
+                ld      hl, (pSymbolTbl)
+                ld      de, 2
+                add     hl, de
+                ld      (pTmp1), hl
+AC632:
+                ld      hl, (pTmp1)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, 5
+                or      a
+                sbc     hl, de
+                jp      z, AC634
+                ld      hl, (pTmp1)
+                ld      de, 2
+                add     hl, de
+                ld      (pTmp2), hl
+                ld      a, (hl)
+                and     10000000b
+                jp      nz, AC633
+                call    sub_6B28
+                jp      AC632
+; ---------------------------------------------------------------------------
+AC633:
+                ld      hl, (pTmp2)
+                ld      a, 01111111b
+                and     (hl)
+                ld      (hl), a
+                ld      hl, (pTmp1)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, (pTmp1)
+                add     hl, de
+                ld      (pTmp1), hl
+                jp      AC632
+; ---------------------------------------------------------------------------
+AC634:
+                call    sub_6A53
+                ld      hl, (pIndex)
+                ex      de, hl
+                ld      hl, (pSymbolTbl) ; Pointer to the symbol table
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ret
+; End of function AC63
+; =============== S U B R O U T I N E =======================================
+; Kill variable + descendents
+AC64:
+                call    SSChk           ; Check for room on the syntax stack
+                dec     ix
+                ld      a, (ix+0)
+                ld      (IOTemp1), a
+                call    sub_50CC
+                ld      a, (IOTemp1)
+                cp      1
+                jp      nz, AC645
+                call    sub_6A99
+                ld      hl, (pTmp1)
+                ld      (pTmp2), hl
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, AC642
+AC641:                                  ; Number of symbols defined
+                ld      hl, (SymCount)
+                dec     hl
+                ld      (SymCount), hl  ; Number of symbols defined
+                ld      hl, (pTmp1)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, (pTmp1)
+                add     hl, de
+                ld      (pTmp1), hl
+AC642:
+                call    sub_6A25
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, AC643
+                ld      a, (I5)
+                or      a
+                jp      z, AC641
+AC643:
+                ld      hl, (pTmp1)
+                dec     hl
+                ld      (pTmp1), hl
+                ld      hl, (pTmp2)
+                dec     hl
+                ld      (pTmp2), hl
+                ld      bc, (pSymbolTbl) ; Pointer to the symbol table
+                ld      hl, (pTmp1)
+                ex      de, hl
+                ld      hl, (pTmp2)
+                call    sub_972F
+                ld      (pTmp2), hl
+                ex      de, hl
+                ld      (pTmp1), hl
+                ld      (pSymbolTbl), hl ; Pointer to the symbol table
+                call    sub_6A53
+                ld      hl, (pIndex)
+                ex      de, hl
+                ld      hl, (pSymbolTbl) ; Pointer to the symbol table
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+AC644:
+                ld      ix, (word_02A4)
+                call    SSChk           ; Check for room on the syntax stack
+                ret
+; ---------------------------------------------------------------------------
+AC645:
+                call    sub_7974
+                ld      hl, glbptrUnk
+                ld      de, Nil
+                call    cp3BVal         ; Compare two 3 bytes values in (DE) and (HL)
+                jp      z, AC644
+                call    sub_70A8
+                ld      (UnkWD01), ix   ; Set but never read
+                call    FindKey         ; Find place for a key
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, AC644
+                ld      a, (SubFL)      ; Set if variable has subscripts
+                or      a
+                jp      nz, AC646
+                call    sub_7A61
+                call    sub_776C
+                jp      AC644
+; ---------------------------------------------------------------------------
+AC646:
+                call    sub_6CE3
+                call    sub_73C4
+                jp      AC644
+; End of function AC64
+; =============== S U B R O U T I N E =======================================
+; Make device current
+AC65:
+                call    SSChk           ; Check for room on the syntax stack
+                call    sub_570D
+                ld      hl, (pDevIsOpen) ; 0=Closed 1=Open
+                ld      a, (hl)
+                or      a
+                jp      nz, AC651
+                ld      a, (IODevice)   ; Current IO device
+                ld      (DeviceInUse), a
+                call    DevPrepare      ; Prepares current device for use
+                jp      Error49         ; Device not open
+; ---------------------------------------------------------------------------
+AC651:
+                ld      a, (byte_A699)
+                or      a
+                jp      z, AC654
+                ld      a, (DeviceInUse)
+                cp      1
+                jp      z, AC654
+                cp      5
+                jp      z, AC654
+                or      a
+                jp      nz, AC652
+                call    sub_5663
+                jp      AC654
+; ---------------------------------------------------------------------------
+AC652:
+                ld      a, (byte_A699)
+                add     a, 2
+                ld      (byte_A699), a
+                ld      de, ibcdTemp0
+                ld      hl, ibcdVmin1
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+                ld      de, ibcdTemp1
+                ld      hl, ibcdVmin1
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+AC653:
+                ld      (pTmp1), ix
+                ld      hl, (pTmp1)
+                dec     hl
+                dec     hl
+                ld      (pTmp1), hl
+                ld      a, (hl)
+                ld      (tmpChar2), a
+                call    sub_569A
+                ld      hl, byte_A699
+                dec     (hl)
+                ld      a, (byte_A699)
+                cp      2
+                jp      nz, AC653
+                call    sub_57BC
+AC654:
+                ld      a, (DeviceInUse)
+                ld      (IODevice), a   ; Current IO device
+                ld      ix, (pTmp6)
+                call    SSChk           ; Check for room on the syntax stack
+                ret
+; End of function AC65
+; =============== S U B R O U T I N E =======================================
+; Reads a variable in the format *V
+ReadChar:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (Result)     ; Holds the result of called function
+                ld      (byte_04FD), a
+                or      a
+                jp      z, ReadChar3
+                ld      a, (IfSW)
+                or      a
+                jp      nz, ReadChar2
+ReadChar1:
+                ld      (pTmp5), ix
+                ld      hl, ibcdVmin1
+                call    BCD5ToStr       ; Convert BCD5 in (HL) to string and push it
+                jp      ReadCharEnd
+; ---------------------------------------------------------------------------
+ReadChar2:
+                ld      a, 0
+                ld      (Time), a
+                ld      a, 1
+                ld      (Wait), a
+ReadChar3:                              ; 1=R/O 2=R/W
+                ld      hl, (pDevType)
+                ld      a, (hl)
+                cp      1
+                jp      z, ReadCharEnd
+                ld      a, (IODevice)   ; Current IO device
+                or      a
+                jp      nz, ReadChar5
+                call    sub_990E
+ReadChar4:                              ; Holds the result of called function
+                ld      a, (Result)
+                or      a
+                jp      z, ReadChar8
+                ld      a, (IfSW)
+                cp      0
+                jp      z, ReadChar1
+                jp      ReadChar8
+; ---------------------------------------------------------------------------
+ReadChar5:                              ; Current IO device
+                ld      a, (IODevice)
+                cp      5
+                jp      nz, ReadChar6
+                call    sub_9446
+                jp      ReadChar4
+; ---------------------------------------------------------------------------
+ReadChar6:                              ; 0=Closed 1=Open
+                ld      hl, (pDevIsOpen)
+                ld      a, (hl)
+                and     00001000b
+                jp      nz, ReadChar7
+                ld      hl, (pDevEOF)
+                ld      a, (hl)
+                ld      hl, (pDevEOFtmp)
+                ld      (hl), a
+ReadChar7:
+                call    sub_5112
+                ld      hl, (pDevIsOpen) ; 0=Closed 1=Open
+                ld      a, (hl)
+                or      00001000b
+                ld      (hl), a
+ReadChar8:
+                ld      (pTmp5), ix
+                ld      a, (tmpChar1)
+                call    CharToStr       ; Convert char in A to string and push it
+                ld      hl, (pDevX)     ; X position (BCD5)
+                ld      c, 5
+                call    IbcdHL          ; Increments by 1 the C bytes long BCD in (HL)
+ReadCharEnd:
+                ld      hl, (pTmp5)
+                ld      (pTmp1), hl
+                ld      a, 1
+                ld      (ReadFL), a
+                call    AC47            ; Set values
+                xor     a
+                ld      (ReadFL), a
+                ret
+; End of function ReadChar
+; =============== S U B R O U T I N E =======================================
+; Handles the writes needed prior to read
+PreRead:
+                call    SSChk           ; Check for room on the syntax stack
+                call    Write
+                ret
+; End of function PreRead
+; =============== S U B R O U T I N E =======================================
+; Reads a variable
+ReadVar:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      (pTmp5), ix
+                ld      hl, (pDevType)  ; 1=R/O 2=R/W
+                ld      a, (hl)
+                cp      1
+                jp      z, Error51      ; Reading from write only device
+                xor     a
+                ld      (StrLen), a     ; Length of the current string (plus 1)
+                ld      a, (IODevice)   ; Current IO device
+                or      a
+                jp      z, ReadVar1
+                cp      5
+                jp      nz, ReadVar2
+ReadVar1:                               ; Holds the result of called function
+                ld      a, (Result)
+                or      a
+                jp      z, ReadVar3
+                ld      a, (IfSW)
+                or      a
+                jp      z, ReadVar6
+                xor     a
+                ld      (Time), a
+                ld      a, 1
+                ld      (Wait), a
+                ld      (byte_04FD), a
+                jp      ReadVar3
+; ---------------------------------------------------------------------------
+ReadVar2:                               ; 0=Closed 1=Open
+                ld      hl, (pDevIsOpen)
+                ld      a, (hl)
+                and     00001000b
+                jp      nz, ReadVar4
+ReadVar3:
+                ld      hl, (pDevEOF)
+                ld      a, (hl)
+                ld      hl, (pDevEOFtmp)
+                ld      (hl), a
+ReadVar4:
+                call    sub_5112
+                ld      a, (tmpChar1)
+                cp      0Dh
+                jp      z, ReadVar6
+                ld      a, (StrLen)     ; Length of the current string (plus 1)
+                cp      255
+                jp      z, Error11      ; String too long
+                ld      hl, StrLen      ; Length of the current string (plus 1)
+                inc     (hl)
+                ld      a, (tmpChar1)
+                ld      (ix+0), a
+                inc     ix
+                ld      a, (StrLen)     ; Length of the current string (plus 1)
+                ld      hl, BytesToRead
+                cp      (hl)
+                jp      z, ReadVar6
+                ld      a, (tmpChar1)
+                cp      1Ah
+                jp      nz, ReadVar4
+                ld      a, (IODevice)   ; Current IO device
+                cp      5
+                jp      nz, ReadVar5
+                jp      ReadVar4
+; ---------------------------------------------------------------------------
+ReadVar5:                               ; Length of the current string (plus 1)
+                ld      a, (StrLen)
+                cp      1
+                jp      z, ReadVar6
+                ld      hl, StrLen      ; Length of the current string (plus 1)
+                dec     (hl)
+                dec     ix
+                ld      a, (ix+0)
+                ld      (tmpChar1), a
+ReadVar6:                               ; Length of the current string (plus 1)
+                ld      a, (StrLen)
+                ld      (ix+0), a
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                ld      a, (IODevice)   ; Current IO device
+                or      a
+                jp      z, ReadVarEnd
+                ld      a, (tmpChar1)
+                cp      1Ah
+                jp      z, ReadVarEnd
+ReadVar7:
+                call    sub_5112
+                ld      a, (tmpChar1)
+                cp      0Ah
+                jp      nz, ReadVar7
+ReadVarEnd:                             ; 0=Closed 1=Open
+                ld      hl, (pDevIsOpen)
+                ld      a, (hl)
+                or      00001000b
+                ld      (hl), a
+                ld      hl, ibcdTemp0
+                ld      a, (StrLen)     ; Length of the current string (plus 1)
+                call    sub_9535
+                ld      hl, (pDevX)     ; X position (BCD5)
+                ld      de, ibcdTemp0
+                ld      c, 5
+                call    AbcdDEHL        ; Adds two C bytes long BCDs in (DE) and (HL)
+                                        ; result goes in (HL)
+                ld      hl, (pTmp5)
+                ld      (pTmp1), hl
+                ld      a, 1
+                ld      (ReadFL), a
+                call    AC47            ; Set values
+                xor     a
+                ld      (ReadFL), a
+                ld      a, 255
+                ld      (BytesToRead), a
+                ret
+; End of function ReadVar
+; =============== S U B R O U T I N E =======================================
+; Clear off transpt info (AC69)
+ClrTRInfo:
+                call    SSChk           ; Check for room on the syntax stack
+                dec     ix
+                ld      a, (ix+0)
+                ld      (tmpChar2), a
+                or      a
+                jp      z, ClrTRInfo1
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (StrLen), a     ; Length of the current string (plus 1)
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     ix, bc
+                call    SSChk           ; Check for room on the syntax stack
+ClrTRInfo1:                             ; Done
+                ld      a, (tmpChar2)
+                cp      1
+                jp      z, ClrTRInfoEnd
+                dec     ix
+                ld      a, (ix+0)
+                or      a
+                jp      z, ClrTRInfo2
+                dec     ix
+                ld      a, (ix+0)
+                ld      (StrLen), a     ; Length of the current string (plus 1)
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     ix, bc
+                call    SSChk           ; Check for room on the syntax stack
+ClrTRInfo2:
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (tmpChar2), a
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     ix, bc
+                call    SSChk           ; Check for room on the syntax stack
+ClrTRInfoEnd:
+                ret
+; End of function ClrTRInfo
+; =============== S U B R O U T I N E =======================================
+; Push a -1 in the stack
+PushMinusOne:
+                ld      (ix+0), 255
+                inc     ix
+                ret
+; End of function PushMinusOne
+; =============== S U B R O U T I N E =======================================
+; Push CASE in the stack (AC71)
+PushCase:
+                ld      a, (Case)
+                ld      (ix+0), a
+                inc     ix
+                ret
+; End of function PushCase
+; =============== S U B R O U T I N E =======================================
+; Body of GOTO command
+bcGoto:
+                call    SSChk           ; Check for room on the syntax stack
+                call    sub_5D1F
+                ld      hl, (pStkStart)
+                ld      (pLineBefore), hl ; Pointer to the previous routine line
+loc_3E43:                               ; Indirection flag
+                ld      a, (IndFL)
+                or      a
+                jp      z, loc_3E50
+                call    IndRet          ; Return from indirection
+                jp      loc_3E43
+; ---------------------------------------------------------------------------
+loc_3E50:
+                ld      a, (ForSW)
+                or      a
+                jp      z, loc_3E78
+                pop     hl
+                ld      (pTmp2), hl
+                pop     hl
+                ld      (pTmp3), hl
+                call    sub_47DD
+                call    sub_4839
+                pop     hl
+                ld      (pTmp1), hl
+                pop     hl
+                ld      (pTmp1), hl
+                ld      hl, (pTmp3)
+                push    hl
+                ld      hl, (pTmp2)
+                push    hl
+                jp      loc_3E50
+; ---------------------------------------------------------------------------
+loc_3E78:                               ; Pointer to the previous routine line
+                ld      hl, (pLineBefore)
+                ld      (pStkStart), hl
+                ld      a, tknSemicolon
+                ld      (Token), a
+                xor     a
+                ld      (Mode), a
+                ld      a, 0
+                ld      (GotoFL), a
+                ld      a, (IndSW)
+                or      a
+                jp      z, loc_3E98
+                ld      a, 1
+                ld      (GotoFL), a
+loc_3E98:
+                ld      a, 1
+                ld      (byte_A691), a
+                ret
+; End of function bcGoto
+; =============== S U B R O U T I N E =======================================
+; Body of DO command
+bcDo:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, errIndStr   ; (todo) Check this
+                ld      (pTmp1), hl
+                ex      de, hl
+                ld      hl, (pRtnName)  ; Pointer to the current routine name
+                call    CopyHLDE        ; Copy (HL) bytes from (HL) to (DE)
+                ld      hl, (pStkStart)
+                ld      (pLineBefore), hl ; Pointer to the previous routine line
+                ld      hl, (pStartOfRtn) ; Pointer to the start of the loaded routine
+                ld      (word_A62C), hl
+                ld      hl, byte_A671
+                ld      (pTmp1), hl
+                ex      de, hl
+                ld      hl, errLabel    ; Label where the error ocurred
+                call    CopyHLDE        ; Copy (HL) bytes from (HL) to (DE)
+                ld      de, ibcdTemp1
+                ld      hl, errIndex    ; Offset from the label where the error ocurred
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+                call    sub_5D1F
+                ld      a, (Mode)
+                cp      0
+                jp      nz, bcDo1
+                ld      de, (pLineBefore) ; Pointer to the previous routine line
+                ld      hl, (Index)
+                or      a
+                sbc     hl, de
+                ld      (Index), hl
+                ld      de, (word_A62C)
+                ld      hl, (pLineBefore) ; Pointer to the previous routine line
+                or      a
+                sbc     hl, de
+                ld      (pLineBefore), hl ; Pointer to the previous routine line
+bcDo1:                                  ; Pointer to the previous routine line
+                ld      hl, (pLineBefore)
+                call    PushP           ; Pushes pointer in HL onto the stack
+                ld      hl, (Index)
+                call    PushP           ; Pushes pointer in HL onto the stack
+                ld      hl, byte_A671
+                call    PushSTR         ; Pushes a MStr into the stack
+                ld      hl, ibcdTemp1
+                call    BCD5ToStr       ; Convert BCD5 in (HL) to string and push it
+                ld      hl, errIndStr   ; Error index in MStr format
+                call    PushSTR         ; Pushes a MStr into the stack
+                ld      a, (ForSW)
+                ld      (ix+0), a
+                inc     ix
+                ld      a, (IndSW)
+                ld      (ix+0), a
+                inc     ix
+                ld      a, (IndFL)      ; Indirection flag
+                ld      (ix+0), a
+                inc     ix
+                ld      a, (Mode)
+                ld      (ix+0), a
+                inc     ix
+                ld      hl, DoSW
+                inc     (hl)
+                xor     a
+                ld      (ForSW), a
+                ld      (IndSW), a
+                ld      (IndFL), a      ; Indirection flag
+                ld      a, 0
+                ld      (Mode), a
+                ld      a, 1
+                ld      (byte_A691), a
+                call    Input           ; Get line to execute
+                jp      MainLoop5       ; Execute command
+; End of function bcDo
+; =============== S U B R O U T I N E =======================================
+; Body of $TEXT function with LineRef
+bfTextL:
+                call    SSChk           ; Check for room on the syntax stack
+                call    MV2LN           ; Move Ptr1 to Lineref
+                dec     ix
+                call    Ln2Stk          ; Line to Stack
+                ret
+; End of function bfTextL
+; =============== S U B R O U T I N E =======================================
+; Body of QUIT command
+bcQuit:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (ForSW)
+                or      a
+                jp      z, bcQuit1
+                call    sub_47DD
+                call    sub_4839
+                ld      a, (ForSW)
+                or      a
+                jp      nz, bcQuit3
+                ld      hl, bmFlag
+                ld      a, (hl)
+                or      00000010b
+                ld      (hl), a
+                jp      bcQuit3
+; ---------------------------------------------------------------------------
+bcQuit1:
+                ld      a, (IndSW)
+                or      a
+                jp      z, bcQuit2
+                call    sub_69DD
+                jp      bcQuit4
+; ---------------------------------------------------------------------------
+bcQuit2:
+                ld      a, (DoSW)
+                or      a
+                jp      z, bcQuit5
+                call    sub_6612
+                jp      bcQuit4
+; ---------------------------------------------------------------------------
+bcQuit3:
+                pop     hl
+                ld      (pTmp1), hl
+bcQuit4:
+                pop     hl
+                ld      (pTmp1), hl
+                pop     hl
+                ld      (pTmp1), hl
+                jp      bcQuitEnd
+; ---------------------------------------------------------------------------
+bcQuit5:                                ; Runs a pre-defined command line when loading
+                ld      a, (AutoexecFlag)
+                cp      3
+                jp      z, bcHalt2
+                ld      a, 1
+                ld      (Mode), a
+                ld      a, 2
+                ld      (bmFlag), a
+bcQuitEnd:
+                ret
+; End of function bcQuit
+; =============== S U B R O U T I N E =======================================
+; Unmark symbol table after exclusive kill
+AC76:
+                ld      a, (KillFL)
+                or      a
+                jp      z, AC762
+                xor     a
+                ld      (KillFL), a
+                ld      hl, (pSymbolTbl) ; Pointer to the symbol table
+                ld      de, 2
+                add     hl, de
+                ld      (pTmp1), hl
+AC761:
+                ld      hl, (pTmp1)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, 5
+                or      a
+                sbc     hl, de
+                jp      z, AC762
+                ld      hl, (pTmp1)
+                ld      de, 2
+                add     hl, de
+                ld      (pIndex), hl
+                ld      a, 01111111b
+                and     (hl)
+                ld      (hl), a
+                ld      hl, (pTmp1)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, (pTmp1)
+                add     hl, de
+                ld      (pTmp1), hl
+                jp      AC761
+; ---------------------------------------------------------------------------
+AC762:
+                ret
+; End of function AC76
+; =============== S U B R O U T I N E =======================================
+; Body of CLOSE command
+bcClose:
+                call    SSChk           ; Check for room on the syntax stack
+                dec     ix
+                ld      a, (ix+0)
+                ld      (NumOfParams), a
+                or      a
+                jp      z, bcClose1
+                cp      1
+                jp      nz, Error48     ; Invalid parameter
+                ld      hl, ibcdTemp0
+                call    StrToBCD        ; Converts string on ToS to BCD in (HL)
+bcClose1:
+                dec     ix
+                ld      a, (ix+0)
+                ld      (DeviceInUse), a
+                ld      (tmpChar2), a
+                call    DevPrepare      ; Prepares current device for use
+                ld      a, (DeviceInUse)
+                cp      2
+                jp      c, bcClose5
+                ld      a, 4
+                ld      hl, DeviceInUse
+                cp      (hl)
+                jp      c, bcClose5
+                ld      hl, (pDevDrive)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      a, (hl)
+                ld      (Drive), a      ; Current disk drive
+                inc     hl
+                ld      (pIndex), hl
+                ld      (pDevFileName), hl
+                ld      hl, (pDevIsOpen) ; 0=Closed 1=Open
+                ld      a, (hl)
+                and     00000010b
+                jp      z, bcClose3
+                ld      a, (hl)
+                and     00000100b
+                jp      nz, bcClose2
+                ld      hl, (pDevRead)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (pTmp1), hl
+                ld      (hl), 1Ah
+bcClose2:
+                ld      hl, (pDevBuffer)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (pFRWBuffer), hl ; Pointer to file R/W buffer
+                call    FSeqWrite       ; Sequential write file (5 retries)
+bcClose3:
+                ld      a, (NumOfParams)
+                or      a
+                jp      z, bcClose5
+                ld      hl, ibcdTemp0
+                ld      c, 5
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jp      z, bcClose4
+                call    FDelete         ; Delete file
+                jp      bcClose5
+; ---------------------------------------------------------------------------
+bcClose4:                               ; Close file
+                call    FClose
+bcClose5:                               ; 0=Closed 1=Open
+                ld      hl, (pDevIsOpen)
+                ld      (hl), 0
+                ld      a, (DeviceInUse)
+                ld      hl, IODevice    ; Current IO device
+                cp      (hl)
+                jp      nz, bcCloseEnd
+                xor     a
+                ld      (IODevice), a   ; Current IO device
+bcCloseEnd:                             ; Current IO device
+                ld      a, (IODevice)
+                ld      (DeviceInUse), a
+                call    DevPrepare      ; Prepares current device for use
+                ret
+; End of function bcClose
+; =============== S U B R O U T I N E =======================================
+bcOpen:
+                call    SSChk           ; Check for room on the syntax stack
+                call    sub_570D
+                ld      hl, (pDevIsOpen) ; 0=Closed 1=Open
+                ld      (hl), 0
+                ld      a, (DeviceInUse)
+                cp      1
+                jp      z, loc_41DE
+                cp      5
+                jp      z, loc_41DE
+                or      a
+                jp      nz, loc_40CA
+                call    sub_5663
+                jp      loc_41DE
+; ---------------------------------------------------------------------------
+loc_40CA:
+                ld      de, ibcdTemp0
+                ld      hl, ibcdVmin1
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+                ld      de, ibcdTemp1
+                ld      hl, ibcdVmin1
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+                ld      a, (byte_A699)
+                or      a
+                jp      nz, loc_40EC
+                ld      a, (RoutinesDR) ; Default drive for routines (0-F)
+                ld      (byte_04DA), a
+                jp      loc_416B
+; ---------------------------------------------------------------------------
+loc_40EC:
+                ld      (pTmp1), ix
+                ld      hl, (pTmp1)
+                dec     hl
+                dec     hl
+                ld      (pTmp1), hl
+                ld      a, (hl)
+                ld      (tmpChar2), a
+                ld      a, (byte_A699)
+                cp      1
+                jp      nz, loc_4137
+                ld      a, (tmpChar2)
+                cp      1
+                jp      z, loc_4119
+                or      a
+                jp      nz, Error48     ; Invalid parameter
+                ld      a, (RoutinesDR) ; Default drive for routines (0-F)
+                ld      (byte_04DA), a
+                jp      loc_414E
+; ---------------------------------------------------------------------------
+loc_4119:
+                dec     ix
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (byte_04DA), a
+                ld      hl, byte_04DA
+                ld      a, 11011111b    ; Uppercase mask
+                and     (hl)
+                ld      (hl), a
+                ld      a, (byte_04DA)
+                sub     41h             ; 'A'
+                ld      (byte_04DA), a
+                jp      loc_4155
+; ---------------------------------------------------------------------------
+loc_4137:
+                ld      a, (byte_A699)
+                cp      2
+                jp      nz, loc_4148
+                ld      hl, byte_A67A
+                call    pullNumber      ; Pulls a number in MStr format from the stack into (HL)
+                jp      loc_4155
+; ---------------------------------------------------------------------------
+loc_4148:
+                call    sub_569A
+                jp      loc_4155
+; ---------------------------------------------------------------------------
+loc_414E:
+                ld      ix, (pTmp1)
+                call    SSChk           ; Check for room on the syntax stack
+loc_4155:
+                ld      hl, byte_A699
+                dec     (hl)
+                ld      a, (byte_A699)
+                or      a
+                jp      nz, loc_40EC
+                ld      hl, byte_A67A
+                ld      (pTmp1), hl
+                ld      a, (hl)
+                or      a
+                jp      nz, loc_419E
+loc_416B:
+                ld      hl, sDev
+                ld      a, (hl)
+                ld      (tmpChar2), a
+                inc     hl
+                ld      (pTmp1), hl
+                call    PushAnoZ        ; Pushes A long value from (HL) if A not zero
+                ld      (pTmp1), hl
+                ld      a, (DeviceInUse)
+                add     a, 30h          ; '0'
+                ld      (I1), a
+                ld      (ix+0), a
+                inc     ix
+                ld      hl, tmpChar2
+                inc     (hl)
+                ld      a, (tmpChar2)
+                ld      (ix+0), a
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                jp      loc_41A4
+; ---------------------------------------------------------------------------
+loc_419E:
+                ld      hl, byte_A67A
+                call    PushSTR         ; Pushes a MStr into the stack
+loc_41A4:
+                ld      hl, (pDevDrive)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (pIndex), hl
+                ld      a, (byte_04DA)
+                ld      (hl), a
+                ld      a, 2
+                ld      (FCBType), a    ; 0:Global, 1:Routine, 2:File
+                ld      a, (byte_04DA)
+                ld      (Drive), a      ; Current disk drive
+                call    FFirst          ; Find first file
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, loc_41D3
+                call    FOpen           ; Open file
+                ld      hl, (pDevType)  ; 1=R/O 2=R/W
+                ld      (hl), 2
+                jp      loc_41DB
+; ---------------------------------------------------------------------------
+loc_41D3:                               ; Create file
+                call    FCreate
+                ld      hl, (pDevType)  ; 1=R/O 2=R/W
+                ld      (hl), 1
+loc_41DB:
+                call    sub_57BC
+loc_41DE:                               ; 0=Closed 1=Open
+                ld      hl, (pDevIsOpen)
+                ld      a, (hl)
+                or      00000001b
+                ld      (hl), a
+                ld      a, (IODevice)   ; Current IO device
+                ld      (DeviceInUse), a
+                call    DevPrepare      ; Prepares current device for use
+                ld      ix, (pTmp6)
+                call    SSChk           ; Check for room on the syntax stack
+                ret
+; End of function bcOpen
+; =============== S U B R O U T I N E =======================================
+sub_41F6:
+                call    SSChk           ; Check for room on the syntax stack
+                call    ExprToNum       ; Convert expression to numeric value
+                ld      hl, FReal
+                call    StrToNum        ; Converts the string on ToS to numeric
+                ret
+; End of function sub_41F6
+; =============== S U B R O U T I N E =======================================
+ShowFiles:
+                call    SSChk           ; Show a list of files
+                xor     a
+                ld      (tmpChar2), a
+                ld      (byte_04EA), a
+                ld      (byte_A6A5), a
+                ld      a, 8
+                ld      hl, I1
+                sub     (hl)
+                ld      (I3), a
+loc_4219:
+                call    sub_9C00
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, loc_42B5
+                ld      hl, (pTmp1)
+                ld      (pTmp9), hl
+                ld      a, (byte_04EA)
+                or      a
+                jp      z, loc_4242
+                ld      a, (I1)
+                cp      3
+                jp      z, loc_4242
+                ld      hl, sColon
+                call    PushSTR         ; Pushes a MStr into the stack
+                call    Write
+loc_4242:
+                ld      a, 8
+                ld      (Count), a
+                ld      hl, (pTmp9)
+                call    PushAnoZ        ; Pushes A long value from (HL) if A not zero
+                ld      (pTmp9), hl
+                ld      a, 1
+                ld      (ITX), a
+                ld      a, (I1)
+                cp      4
+                jp      z, loc_4262
+                ld      a, 4
+                ld      (ITX), a
+loc_4262:                               ; Space
+                ld      (ix+0), Blank
+                inc     ix
+                ld      hl, ITX
+                dec     (hl)
+                ld      a, (ITX)
+                or      a
+                jp      nz, loc_4262
+                ld      a, (I1)
+                cp      3
+                jp      z, loc_4289
+                ld      a, 3
+                ld      (Count), a
+                ld      hl, (pTmp9)
+                call    PushAnoZ        ; Pushes A long value from (HL) if A not zero
+                ld      (pTmp9), hl
+loc_4289:
+                ld      (ix+0), 0Ch
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                call    Write
+                ld      a, 1
+                ld      (tmpChar2), a
+                ld      hl, byte_04EA
+                inc     (hl)
+                ld      a, (byte_04EA)
+                ld      hl, I3
+                cp      (hl)
+                jp      nz, loc_4219
+                call    PrintCRLF
+                xor     a
+                ld      (byte_04EA), a
+                jp      loc_4219
+; ---------------------------------------------------------------------------
+loc_42B5:
+                ld      a, (byte_04EA)
+                or      a
+                jp      z, locret_42BF
+                call    PrintCRLF
+locret_42BF:
+                ret
+; End of function ShowFiles
+; =============== S U B R O U T I N E =======================================
+sub_42C0:
+                call    SSChk           ; Check for room on the syntax stack
+                call    sub_50CC
+                call    sub_6A99
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, loc_42E1
+                ld      a, (byte_0549)
+                or      a
+                jp      z, Error03      ; Undefined local variable
+                ld      hl, byte_A69E
+                ld      (pVar), hl      ; Points to a var in the symbol table
+                jp      loc_42FA
+; ---------------------------------------------------------------------------
+loc_42E1:
+                ld      a, (ForFL)
+                cp      1
+                jp      z, loc_42FA
+                ld      hl, (word_02F2)
+                dec     hl
+                ld      (word_02F2), hl
+                ld      ix, (word_02F2)
+                call    SSChk           ; Check for room on the syntax stack
+                jp      loc_4301
+; ---------------------------------------------------------------------------
+loc_42FA:
+                ld      ix, (word_0502)
+                call    SSChk           ; Check for room on the syntax stack
+loc_4301:                               ; Points to a var in the symbol table
+                ld      hl, (pVar)
+                call    PushSTR         ; Pushes a MStr into the stack
+                xor     a
+                ld      (ForFL), a
+                ret
+; End of function sub_42C0
+; =============== S U B R O U T I N E =======================================
+sub_430C:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (Mode)
+                cp      0
+                jp      nz, loc_4324
+                ld      de, (pStkStart)
+                ld      hl, (Index)
+                or      a
+                sbc     hl, de
+                ld      (Index), hl
+loc_4324:
+                ld      hl, (Index)
+                call    PushP           ; Pushes pointer in HL onto the stack
+                ld      (pTmp1), ix
+                ld      hl, (pTmp1)
+                ld      bc, 65533
+                add     hl, bc
+                ld      (pTmp1), hl
+                ld      a, (hl)
+                ld      (tmpChar2), a
+loc_433C:
+                ld      a, (tmpChar2)
+                or      a
+                jp      z, loc_4358
+                ld      hl, (pTmp1)
+                dec     hl
+                dec     hl
+                ld      e, (hl)
+                ld      d, 0
+                or      a
+                sbc     hl, de
+                ld      (pTmp1), hl
+                ld      hl, tmpChar2
+                dec     (hl)
+                jp      loc_433C
+; ---------------------------------------------------------------------------
+loc_4358:
+                ld      hl, (pTmp1)
+                ld      bc, 65534
+                add     hl, bc
+                ld      (pTmp1), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                dec     hl
+                ld      (Index), hl
+                ld      a, (Mode)
+                cp      0
+                jp      nz, loc_437A
+                ld      de, (pStkStart)
+                add     hl, de
+                ld      (Index), hl
+loc_437A:                               ; Loads to (Token) the token code of char (++pStkPos)
+                call    GToken
+                jp      MainLoop5       ; Execute command
+; End of function sub_430C
+; =============== S U B R O U T I N E =======================================
+sub_4380:
+                call    SSChk           ; Check for room on the syntax stack
+                call    IXtoHL          ; Loads the value in (IX) into HL
+                ld      (Index), hl
+                ld      a, (Mode)
+                cp      0
+                jp      nz, loc_4399
+                ld      de, (pStkStart)
+                add     hl, de
+                ld      (Index), hl
+loc_4399:
+                ld      (pTmp2), ix
+                ld      hl, (pTmp2)
+                dec     hl
+                dec     hl
+                dec     hl
+                ld      a, (hl)
+                ld      (I1X), a
+                cpl
+                ld      c, a
+                ld      b, 0FFh
+                inc     bc
+                add     hl, bc
+                ld      (pTmp2), hl
+                ld      (word_0502), ix
+                ld      hl, (word_0502)
+                ld      (pTmp3), hl
+                ld      ix, (pTmp2)
+                call    SSChk           ; Check for room on the syntax stack
+                ld      bc, 0FFFEh
+                add     ix, bc
+                call    SSChk           ; Check for room on the syntax stack
+                ld      (Vptr), ix
+                ld      a, 1
+                ld      (ForFL), a
+                call    sub_42C0
+                call    ExprToNum       ; Convert expression to numeric value
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (I2), a
+                ld      a, (I1X)
+                ld      (I1), a
+                ld      a, 5
+                ld      (I6), a
+                call    NumOP
+                ld      hl, (Vptr)
+                ld      (pTmp1), hl
+                ld      hl, (word_0502)
+                ld      (NSTOS), hl
+                call    AC47            ; Set values
+                ld      a, 2
+                ld      (Case), a
+                ret
+; End of function sub_4380
+; =============== S U B R O U T I N E =======================================
+; Body of $TEXT function with Offset
+bfTextO:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, ibcdTemp0
+                call    StrToBCD        ; Converts string on ToS to BCD in (HL)
+                ld      c, INTLN        ; Size of an Integer (5)
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jp      nz, bfTextO1
+                ld      hl, (pRtnName)  ; Pointer to the current routine name
+                call    PushSTR         ; Pushes a MStr into the stack
+                ret
+; ---------------------------------------------------------------------------
+bfTextO1:
+                ld      a, 1
+                ld      (DT), a
+                ld      hl, (pStartOfRtn) ; Pointer to the start of the loaded routine
+                ld      (pTmp2), hl
+                ld      hl, ibcdTemp0
+                ld      c, INTLN        ; Size of an Integer (5)
+                call    DbcdHL          ; Decrements by 1 the C bytes long BCD in (HL)
+                call    BCD5ToStr       ; Convert BCD5 in (HL) to string and push it
+                call    MV2LN           ; Move Ptr1 to Lineref
+                call    Ln2Stk          ; Line to Stack
+                xor     a
+                ld      (DT), a
+                ret
+; End of function bfTextO
+; =============== S U B R O U T I N E =======================================
+sub_443E:
+                call    SSChk           ; Check for room on the syntax stack
+                call    sub_50CC
+                ld      hl, (word_02F2)
+                dec     hl
+                ld      (pTmp7), hl
+                call    sub_70A8
+                xor     a
+                ld      (NR), a
+                call    FindKey         ; Find place for a key
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, loc_4474
+loc_445D:
+                ld      a, (byte_0549)
+                or      a
+                jp      z, Error07      ; Undefined global name
+                ld      hl, byte_A69E
+                ld      (pTmp10), hl
+                ld      ix, (word_0502)
+                call    SSChk           ; Check for room on the syntax stack
+                jp      loc_449B
+; ---------------------------------------------------------------------------
+loc_4474:
+                call    sub_6CE3
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, loc_4482
+                jp      loc_445D
+; ---------------------------------------------------------------------------
+loc_4482:
+                ld      a, (ForFL)
+                cp      1
+                jp      z, loc_4494
+                ld      ix, (pTmp7)
+                call    SSChk           ; Check for room on the syntax stack
+                jp      loc_449B
+; ---------------------------------------------------------------------------
+loc_4494:
+                ld      ix, (word_0502)
+                call    SSChk           ; Check for room on the syntax stack
+loc_449B:
+                ld      hl, (pTmp10)
+                call    PushSTR         ; Pushes a MStr into the stack
+                xor     a
+                ld      (ForFL), a
+                ret
+; End of function sub_443E
+; =============== S U B R O U T I N E =======================================
+sub_44A6:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (Index)
+                ld      (pIndex), hl
+                ld      a, 1
+                ld      (byte_A69F), a
+                ld      (TPP), ix
+                ld      hl, (word_02FA)
+                ld      (pTmp1), hl
+                dec     hl
+                dec     hl
+                ld      (Index), hl
+                ld      (pTmp3), hl
+                ld      e, (hl)
+                ld      d, 0
+                or      a
+                sbc     hl, de
+                ld      (Index), hl
+                ld      (pTmp4), hl
+                xor     a
+                ld      (Count), a
+                ld      de, ibcd1
+                ld      hl, ibcdV0
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+loc_44DF:
+                ld      hl, (Index)
+                ex      de, hl
+                ld      hl, (pTmp3)
+                or      a
+                sbc     hl, de
+                jp      nz, loc_44F9
+                ld      hl, (pTmp1)
+                ex      de, hl
+                ld      hl, (TPP)
+                or      a
+                sbc     hl, de
+                jp      z, loc_45F3
+loc_44F9:
+                ld      hl, (pTmp1)
+                ex      de, hl
+                ld      hl, (TPP)
+                or      a
+                sbc     hl, de
+                jp      z, loc_4539
+                ld      hl, ibcd1
+                ld      c, 5
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jp      nz, loc_4539
+                ld      hl, (pTmp1)
+                ld      (pTmp2), hl
+                inc     hl
+                ld      c, (hl)
+                ld      b, 0
+                add     hl, bc
+                inc     hl
+                ld      (pTmp1), hl
+                ld      de, ibcd1
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+                ld      hl, (pTmp1)
+                ld      de, 5
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      de, ibcdUnk05
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+                jp      loc_4584
+; ---------------------------------------------------------------------------
+loc_4539:
+                ld      a, (Count)
+                or      a
+                jp      z, loc_4606
+                ld      hl, Count
+                dec     (hl)
+                call    IXtoHL          ; Loads the value in (IX) into HL
+                ld      (Index), hl
+                call    IXtoHL          ; Loads the value in (IX) into HL
+                ld      (pTmp1), hl
+                ld      (pTmp2), hl
+                inc     hl
+                ld      c, (hl)
+                ld      b, 0
+                add     hl, bc
+                inc     hl
+                ld      de, 5
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      (pTmp5), ix
+                ld      hl, (pTmp5)
+                ld      bc, 0FFFBh
+                add     hl, bc
+                ld      (pTmp5), hl
+                ld      de, ibcdUnk05
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+                ld      ix, (pTmp5)
+                call    SSChk           ; Check for room on the syntax stack
+                ld      de, ibcd1
+                ld      hl, ibcdV1
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+loc_4584:
+                ld      hl, (pTmp1)
+                ld      de, 5
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      hl, (pTmp2)
+                ld      a, (hl)
+                cp      0
+                jp      z, loc_459D
+                call    sub_68D5
+                jp      loc_45A0
+; ---------------------------------------------------------------------------
+loc_459D:
+                call    sub_6866
+loc_45A0:
+                ld      hl, ibcd1
+                ld      c, 5
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jp      nz, loc_44DF
+                ld      hl, ibcdUnk05
+                ld      c, 5
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jp      z, loc_44DF
+                ld      hl, (pTmp2)
+                ld      a, (hl)
+                or      a
+                jp      z, loc_44DF
+                ld      (pTmp5), ix
+                ld      hl, (pTmp5)
+                ld      de, ibcdUnk05
+                call    CopyIntDEHL     ; Copy INTLN bytes from (DE) to (HL) ; SetI
+                ld      hl, (pTmp5)
+                ld      de, 5
+                add     hl, de
+                ld      (pTmp5), hl
+                ld      ix, (pTmp5)
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (pTmp2)
+                dec     hl
+                ld      (pTmp2), hl
+                call    PushP           ; Pushes pointer in HL onto the stack
+                ld      hl, (Index)
+                call    PushP           ; Pushes pointer in HL onto the stack
+                ld      hl, Count
+                inc     (hl)
+                jp      loc_44DF
+; ---------------------------------------------------------------------------
+loc_45F3:
+                ld      hl, ibcd1
+                ld      c, 5
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jp      nz, loc_4606
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                jp      loc_460B
+; ---------------------------------------------------------------------------
+loc_4606:
+                ld      a, 0
+                ld      (Result), a     ; Holds the result of called function
+loc_460B:
+                ld      ix, (pTmp4)
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (bmFlag1)    ; bit0:String
+                                        ; bit1:Not
+                                        ; bit2:Dirty
+                                        ; bit4:Break
+                and     NOTFL
+                jp      z, loc_4629
+                ld      hl, bmFlag1     ; bit0:String
+                                        ; bit1:Not
+                                        ; bit2:Dirty
+                                        ; bit4:Break
+                ld      a, 11111101b
+                and     (hl)
+                ld      (hl), a
+                ld      a, (Result)     ; Holds the result of called function
+                xor     00000001b
+                ld      (Result), a     ; Holds the result of called function
+loc_4629:                               ; Holds the result of called function
+                ld      a, (Result)
+                call    CharToStr       ; Convert char in A to string and push it
+                ld      hl, (pIndex)
+                dec     hl
+                ld      (Index), hl
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                xor     a
+                ld      (byte_A69F), a
+                ret
+; End of function sub_44A6
+; =============== S U B R O U T I N E =======================================
+sub_463E:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      (word_0502), ix
+                ld      ix, (Vptr)
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, 1
+                ld      (ForFL), a
+                call    sub_42C0
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (byte_04EB), a
+                ld      a, 6
+                ld      (I6), a
+                ld      (pTmp1), ix
+                ld      hl, (word_02FE)
+                ld      a, (hl)
+                cp      Minus
+                jp      z, loc_46C1
+                ld      hl, (word_0502)
+                ld      (pTmp2), hl
+                ld      hl, (word_02F8)
+                ld      (pTmp3), hl
+                ld      a, (byte_04EB)
+                ld      (I1), a
+                ld      a, (byte_04EC)
+                ld      (I2), a
+loc_4688:
+                call    NumOP
+                ld      ix, (word_0502)
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (pTmp1)
+                ld      a, (hl)
+                cp      Minus
+                jp      z, loc_46DC
+                ld      a, (hl)
+                cp      30h             ; '0'
+                jp      z, loc_46DC
+                xor     a
+                ld      (Case), a
+                ld      a, (Mode)
+                cp      0
+                jp      nz, loc_46BA
+                ld      de, (pStkStart)
+                ld      hl, (Index)
+                or      a
+                sbc     hl, de
+                ld      (Index), hl
+loc_46BA:
+                ld      hl, (Index)
+                call    PushP           ; Pushes pointer in HL onto the stack
+                ret
+; ---------------------------------------------------------------------------
+loc_46C1:
+                ld      hl, (word_02F8)
+                ld      (pTmp2), hl
+                ld      hl, (word_0502)
+                ld      (pTmp3), hl
+                ld      a, (byte_04EC)
+                ld      (I1), a
+                ld      a, (byte_04EB)
+                ld      (I2), a
+                jp      loc_4688
+; ---------------------------------------------------------------------------
+loc_46DC:
+                ld      a, 1
+                ld      (Case), a
+                ret
+; End of function sub_463E
+; =============== S U B R O U T I N E =======================================
+sub_46E2:
+                call    SSChk           ; Check for room on the syntax stack
+                xor     a
+                ld      (Case), a
+                call    sub_664B
+                ld      ix, (Vptr)
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, 1
+                ld      (ForFL), a
+                call    sub_42C0
+                call    ExprToNum       ; Convert expression to numeric value
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (byte_04EB), a
+                ld      (pTmp1), ix
+                ld      hl, (word_02F8)
+                ld      (pTmp2), hl
+                ld      a, (byte_04EC)
+                ld      (I1), a
+                ld      hl, (word_02FE)
+                ld      (pTmp3), hl
+                ld      a, (byte_04ED)
+                ld      (I2), a
+                ld      a, 6
+                ld      (I6), a
+                call    NumOP
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (I3), a
+                ld      (pTmp5), ix
+                ld      hl, (word_02FE)
+                ld      a, (hl)
+                cp      Minus
+                jp      z, loc_476A
+                ld      hl, (pTmp1)
+                ld      (pTmp2), hl
+                ld      a, (I3)
+                ld      (I1), a
+                ld      hl, (word_0502)
+                ld      (pTmp3), hl
+                ld      a, (byte_04EB)
+                ld      (I2), a
+loc_475B:
+                call    NumOP
+                ld      hl, (pTmp5)
+                ld      a, (hl)
+                cp      Minus
+                jp      z, loc_47BA
+                jp      loc_4785
+; ---------------------------------------------------------------------------
+loc_476A:
+                ld      hl, (word_0502)
+                ld      (pTmp2), hl
+                ld      a, (byte_04EB)
+                ld      (I1), a
+                ld      hl, (pTmp1)
+                ld      (pTmp3), hl
+                ld      a, (I3)
+                ld      (I2), a
+                jp      loc_475B
+; ---------------------------------------------------------------------------
+loc_4785:
+                ld      hl, (word_02FE)
+                ld      (pTmp2), hl
+                ld      a, (byte_04ED)
+                ld      (I1), a
+                ld      hl, (word_0502)
+                ld      (pTmp3), hl
+                ld      a, (byte_04EB)
+                ld      (I2), a
+                ld      a, 5
+                ld      (I6), a
+                call    NumOP
+                ld      hl, (Vptr)
+                ld      (pTmp1), hl
+                ld      hl, (word_0502)
+                ld      (NSTOS), hl
+                call    AC47            ; Set values
+                ld      a, 1
+                ld      (Case), a
+                ret
+; ---------------------------------------------------------------------------
+loc_47BA:
+                ld      ix, (word_0502)
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (Mode)
+                cp      0
+                jp      nz, loc_47D6
+                ld      de, (pStkStart)
+                ld      hl, (Index)
+                or      a
+                sbc     hl, de
+                ld      (Index), hl
+loc_47D6:
+                ld      hl, (Index)
+                call    PushP           ; Pushes pointer in HL onto the stack
+                ret
+; End of function sub_46E2
+; =============== S U B R O U T I N E =======================================
+sub_47DD:
+                call    SSChk           ; Check for room on the syntax stack
+                call    IXtoHL          ; Loads the value in (IX) into HL
+                ld      (Index), hl
+                ld      a, (Mode)
+                cp      0
+                jp      nz, loc_47F6
+                ld      de, (pStkStart)
+                add     hl, de
+                ld      (Index), hl
+loc_47F6:
+                dec     ix
+                ld      a, (ix+0)
+                ld      (IOTemp1), a
+loc_47FE:
+                ld      a, (IOTemp1)
+                or      a
+                jp      z, loc_4820
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (I1), a
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     ix, bc
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, IOTemp1
+                dec     (hl)
+                jp      loc_47FE
+; ---------------------------------------------------------------------------
+loc_4820:
+                ld      hl, (Index)
+                dec     hl
+                ld      (Index), hl
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                ld      (pTmp6), ix
+                ld      hl, (pTmp6)
+                ld      bc, 0FFFEh
+                add     hl, bc
+                ld      (Vptr), hl
+                ret
+; End of function sub_47DD
+; =============== S U B R O U T I N E =======================================
+sub_4839:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, ForSW
+                dec     (hl)
+                ld      bc, 0FFFEh      ; 65534
+                add     ix, bc
+                call    SSChk           ; Check for room on the syntax stack
+                call    IXtoHL          ; Loads the value in (IX) into HL
+                ld      (pTmp1), hl
+                ld      (TPP), ix
+                ld      de, (pTmp1)
+                ld      hl, (TPP)
+                or      a
+                sbc     hl, de
+                ld      (TPP), hl
+                ld      ix, (TPP)
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, bmActFL
+                ld      a, (hl)
+                or      00000010b
+                ld      (hl), a
+                ret
+; End of function sub_4839
+; =============== S U B R O U T I N E =======================================
+Timeout:
+                call    SSChk           ; Check for room on the syntax stack
+                call    ExprToInt       ; Convert expression to integer
+                ld      hl, HangTime
+                call    StrToBCD        ; Converts string on ToS to BCD in (HL)
+                xor     a
+                ld      (StrLen), a     ; Length of the current string (plus 1)
+                ld      a, (Locks)
+                cp      1
+                jp      z, Timeout2
+                ld      a, (hl)
+                and     11110000b
+                jp      nz, Timeout1
+                ld      c, 5
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jp      z, Timeout1
+                jp      Timeout2
+; ---------------------------------------------------------------------------
+Timeout1:
+                xor     a
+                ld      (IfSW), a
+                ret
+; ---------------------------------------------------------------------------
+Timeout2:
+                ld      a, 1
+                ld      (IfSW), a
+                ret
+; End of function Timeout
+; =============== S U B R O U T I N E =======================================
+sub_48A2:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (pRtnName)  ; Pointer to the current routine name
+                ld      (pTmp1), hl
+                call    sub_5AA4
+                ld      hl, (word_9F96)
+                ld      (hl), 0
+                ld      hl, 0
+                ld      (word_A624), hl
+                ld      hl, (pStartOfRtn) ; Pointer to the start of the loaded routine
+                ld      (pEndOfRtn), hl ; Pointer to the end of the loaded routine
+                ld      (pCurRtnLine), hl ; Pointer to current routine line
+                ld      (word_9F9A), hl
+                ld      hl, (pEndOfRtn) ; Pointer to the end of the loaded routine
+                ld      (hl), EOF       ; ^Z=SUB/EOF
+                ld      hl, bmFlag1     ; bit0:String
+                                        ; bit1:Not
+                                        ; bit2:Dirty
+                                        ; bit4:Break
+                ld      a, 11111011b
+                and     (hl)
+                ld      (hl), a
+                ret
+; End of function sub_48A2
+; =============== S U B R O U T I N E =======================================
+sub_48D2:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (pRtnName)  ; Pointer to the current routine name
+                ld      (pTmp1), hl
+                call    sub_5AA4
+                call    LineSet
+                call    sub_5D7A
+                ret
+; End of function sub_48D2
+; =============== S U B R O U T I N E =======================================
+; Body oz ZLOAD command
+bczLoad:
+                call    SSChk           ; Check for room on the syntax stack
+                call    sub_5FDE
+                ld      hl, (pEndOfRtn) ; Pointer to the end of the loaded routine
+                ld      (pCurRtnLine), hl ; Pointer to current routine line
+                ld      hl, bmFlag1     ; bit0:String
+                                        ; bit1:Not
+                                        ; bit2:Dirty
+                                        ; bit4:Break
+                ld      a, 11111011b
+                and     (hl)
+                ld      (hl), a
+                ret
+; End of function bczLoad
+; =============== S U B R O U T I N E =======================================
+sub_48F9:
+                ld      hl, (pStartOfRtn) ; Pointer to the start of the loaded routine
+                ld      (pCurRtnLine), hl ; Pointer to current routine line
+                ret
+; End of function sub_48F9
+; =============== S U B R O U T I N E =======================================
+sub_4900:
+                call    SSChk           ; Check for room on the syntax stack
+                call    MV2LN           ; Move Ptr1 to Lineref
+                ld      a, (Result)     ; Holds the result of called function
+                or      a
+                jp      z, Error34      ; Invalid line reference
+                ld      hl, (pTmp2)
+                ld      (pCurRtnLine), hl ; Pointer to current routine line
+                ret
+; End of function sub_4900
+; =============== S U B R O U T I N E =======================================
+sub_4914:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (pStartOfRtn) ; Pointer to the start of the loaded routine
+                ld      (pTmp1), hl
+loc_491D:
+                ld      hl, (pTmp1)
+                ld      a, (hl)
+                cp      EOF             ; ^Z=SUB/EOF
+                jp      z, locret_492C
+                call    LineWrite
+                jp      loc_491D
+; ---------------------------------------------------------------------------
+locret_492C:
+                ret
+; End of function sub_4914
+; =============== S U B R O U T I N E =======================================
+sub_492D:
+                call    SSChk           ; Check for room on the syntax stack
+                call    LineSet
+                ld      hl, (pTmp2)
+                ld      (pTmp1), hl
+loc_4939:
+                call    LineWrite
+                ld      hl, (pTmp1)
+                ex      de, hl
+                ld      hl, (pTmp4)
+                or      a
+                sbc     hl, de
+                jp      nz, loc_4939
+                ret
+; End of function sub_492D
+; =============== S U B R O U T I N E =======================================
+; Scan for B-O-S
+ScanBOS:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, ForSW
+                inc     (hl)
+                ld      hl, (Index)
+                ld      (pTmp1), hl
+                ld      a, (Token)
+                ld      (tmpChar2), a
+                xor     a
+                ld      (I1), a
+ScanBOS1:
+                ld      hl, (pTmp1)
+                ld      a, (hl)
+                cp      Blank           ; Space
+                jp      z, ScanBOS3
+                ld      a, (hl)
+                cp      CR
+                jp      z, ScanBOS4
+                ld      a, (hl)
+                cp      Quotes          ; "
+                jp      nz, ScanBOS2
+                ld      a, (I1)
+                xor     00000001b
+                ld      (I1), a
+ScanBOS2:
+                ld      hl, (pTmp1)
+                inc     hl
+                ld      (pTmp1), hl
+                jp      ScanBOS1
+; ---------------------------------------------------------------------------
+ScanBOS3:
+                ld      a, (I1)
+                cp      1
+                jp      z, ScanBOS2
+                ld      hl, (pTmp1)
+                inc     hl
+                ld      (pTmp1), hl
+ScanBOS4:
+                ld      a, (Mode)
+                cp      0
+                jp      nz, ScanBOS5
+                ld      de, (pStkStart)
+                ld      hl, (pTmp1)
+                or      a
+                sbc     hl, de
+                ld      (pTmp1), hl
+ScanBOS5:
+                ld      hl, (pTmp1)
+                call    PushP           ; Pushes pointer in HL onto the stack
+                ld      a, (tmpChar2)
+                ld      (Token), a
+                ret
+; End of function ScanBOS
+; =============== S U B R O U T I N E =======================================
+; Push global on stack
+PushGlobal:
+                ld      a, (IndFL)      ; Indirection flag
+                ld      (ix+0), a
+                inc     ix
+                ld      a, (NR)
+                ld      (ix+0), a
+                inc     ix
+                ld      a, (SetSW)
+                ld      (ix+0), a
+                inc     ix
+                ld      a, (GLB)
+                ld      (ix+0), a
+                inc     ix
+                xor     a
+                ld      (IndFL), a      ; Indirection flag
+                ld      a, 0
+                ld      (SetSW), a
+                ret
+; End of function PushGlobal
+; =============== S U B R O U T I N E =======================================
+; Dummy routine to fix STABK for Lock
+AC101:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      ix, (SetBs)
+                call    SSChk           ; Check for room on the syntax stack
+                xor     a
+                ld      (SetFL), a
+                ret
+; End of function AC101
+; =============== S U B R O U T I N E =======================================
+; Do nothing
+AC102:
+                call    SSChk           ; Check for room on the syntax stack
+                ret
+; End of function AC102
+; =============== S U B R O U T I N E =======================================
+; Body of XECUTE command
+bcXecute:
+                call    SSChk           ; Check for room on the syntax stack
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (StrLen), a     ; Length of the current string (plus 1)
+                ld      (pTmp1), ix
+                ld      hl, (pTmp1)
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     hl, bc
+                ld      (pTmp1), hl
+                ld      hl, IndSW
+                inc     (hl)
+                ld      a, (StrLen)     ; Length of the current string (plus 1)
+                cp      255
+                jp      z, Error11      ; String too long
+                ld      hl, StrLen      ; Length of the current string (plus 1)
+                inc     (hl)
+                ld      (ix+0), CR      ; Adds a CR to the end of the command
+                inc     ix
+                ld      a, (StrLen)     ; Length of the current string (plus 1)
+                ld      (ix+0), a
+                inc     ix
+                call    sub_55A0
+                ld      hl, errLabel    ; (todo) Check this
+                call    PushSTR         ; Pushes a MStr into the stack
+                ld      hl, errIndex    ; Offset from the label where the error ocurred
+                call    BCD5ToStr       ; Convert BCD5 in (HL) to string and push it
+                ld      hl, (pRtnName)  ; Pointer to the current routine name
+                call    PushSTR         ; Pushes a MStr into the stack
+                ld      a, (ForSW)
+                ld      (ix+0), a
+                inc     ix
+                ld      a, (IndFL)      ; Indirection flag
+                ld      (ix+0), a
+                inc     ix
+                ld      a, (Mode)
+                ld      (ix+0), a
+                inc     ix
+                ld      a, 2
+                ld      (Mode), a
+                xor     a
+                ld      (ForSW), a
+                ld      (IndFL), a      ; Indirection flag
+                ld      hl, (pTmp1)
+                ld      (pStkStart), hl
+                dec     hl
+                ld      (Index), hl
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                jp      MainLoop5       ; Execute command
+; End of function bcXecute
+; =============== S U B R O U T I N E =======================================
+; Make stack ToS to string for $CHAR
+AC104:
+                ld      (ix+0), 3
+                inc     ix
+                ret
+; End of function AC104
+; =============== S U B R O U T I N E =======================================
+AC105:
+                ld      a, 1
+                ld      (IOTemp2), a
+                ld      hl, bmActFL
+                ld      a, (hl)
+                or      00000010b
+                ld      (hl), a
+                ret
+; End of function AC105
+; =============== S U B R O U T I N E =======================================
+sub_4A8E:
+                call    SSChk           ; Check for room on the syntax stack
+                call    Null1           ; Does nothing
+                call    sub_50FE
+                ld      (pIndex), ix
+                ld      de, (pTmp1)
+                ld      hl, (pIndex)
+                or      a
+                sbc     hl, de
+                ld      (pIndex), hl
+                ld      hl, (pTmp1)
+                ld      a, (hl)
+                ld      (Count), a
+                ld      (pTmp3), hl
+                inc     hl
+                ld      (pTmp2), hl
+                ld      bc, (pIndex)
+                ld      hl, (pTmp1)
+                ex      de, hl
+                ld      hl, (pTmp2)
+                call    CopyBCup        ; Copy BC bytes from (HL)->(DE) up
+                ld      (pTmp2), hl
+                ex      de, hl
+                ld      (pTmp1), hl
+                dec     ix
+                ld      hl, Count
+                inc     (hl)
+                ld      a, (Count)
+                ld      (ix+0), a
+                inc     ix
+                ret
+; End of function sub_4A8E
+; =============== S U B R O U T I N E =======================================
+sub_4ADA:
+                dec     ix
+                ld      a, (ix+0)
+                ld      (Count), a
+                ld      (ix+0), 0
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                ld      hl, Count
+                inc     (hl)
+                ld      a, (Count)
+                ld      (ix+0), a
+                inc     ix
+                ret
+; End of function sub_4ADA
+; =============== S U B R O U T I N E =======================================
+; Check for end on name level indirection
+CkEndNLI:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (Token)
+                cp      tknCRLF         ; Is it CR or LF?
+                jp      nz, Error24     ; Illegal use of indirection
+CkEndNLI1:                              ; Return from indirection
+                call    IndRet
+                ld      a, (IndFL)      ; Indirection flag
+                cp      2
+                jp      nz, CkEndNLIEnd
+                ld      a, (Token)
+                cp      tknCRLF         ; Is it CR or LF?
+                jp      z, CkEndNLI1
+CkEndNLIEnd:
+                ret
+; End of function CkEndNLI
+; =============== S U B R O U T I N E =======================================
+; Put indirect string on stack
+AC109:
+                call    SSChk           ; (todo)
+                ld      a, 4
+                ld      (Case), a
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (StrLen), a     ; Length of the current string (plus 1)
+                ld      (pTmp1), ix
+                ld      hl, (pTmp1)
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     hl, bc
+                ld      (pTmp1), hl
+                ld      a, (StrLen)     ; Length of the current string (plus 1)
+                cp      255
+                jp      z, Error11      ; String too long
+                ld      hl, StrLen      ; Length of the current string (plus 1)
+                inc     (hl)
+                ld      (ix+0), 0Dh
+                inc     ix
+                ld      a, (StrLen)     ; Length of the current string (plus 1)
+                ld      (ix+0), a
+                inc     ix
+                ld      hl, (pStkStart)
+                ld      (pLineBefore), hl ; Pointer to the previous routine line
+                ld      a, (Mode)
+                cp      0
+                jp      nz, loc_4B7E
+                ld      de, (pLineBefore) ; Pointer to the previous routine line
+                ld      hl, (Index)
+                or      a
+                sbc     hl, de
+                ld      (Index), hl
+                ld      de, (pStartOfRtn) ; Pointer to the start of the loaded routine
+                ld      hl, (pLineBefore) ; Pointer to the previous routine line
+                or      a
+                sbc     hl, de
+                ld      (pLineBefore), hl ; Pointer to the previous routine line
+loc_4B7E:                               ; Pointer to the previous routine line
+                ld      hl, (pLineBefore)
+                call    PushP           ; Pushes pointer in HL onto the stack
+                ld      hl, (Index)
+                call    PushP           ; Pushes pointer in HL onto the stack
+                ld      a, (IndFL)      ; Indirection flag
+                ld      (ix+0), a
+                inc     ix
+                ld      a, (Mode)
+                ld      (ix+0), a
+                inc     ix
+                ld      a, 3
+                ld      (Mode), a
+                ld      hl, (pTmp1)
+                ld      (Index), hl
+                ld      (pStkStart), hl
+                dec     hl
+                ld      (Index), hl
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                ld      a, 1
+                ld      (IndFL), a      ; Indirection flag
+                ld      (Case), a
+                ret
+; End of function AC109
+; =============== S U B R O U T I N E =======================================
+; Check for end of all levels of name indir
+AC110:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (IndFL)      ; Indirection flag
+                cp      1
+                jp      nz, AC1102
+AC1101:
+                ld      a, (Token)
+                cp      tknCRLF         ; Is it CR or LF?
+                jp      nz, Error24     ; Illegal use of indirection
+                call    IndRet          ; Return from indirection
+                ld      a, (IndFL)      ; Indirection flag
+                cp      1
+                jp      z, AC1101
+AC1102:
+                ret
+; End of function AC110
+; =============== S U B R O U T I N E =======================================
+; Body of ZDELETE command
+bczDelete:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (RoutinesDR) ; Default drive for routines (0-F)
+                ld      (Drive), a      ; Current disk drive
+                ld      a, 1
+                ld      (FCBType), a    ; 0:Global, 1:Routine, 2:File
+                call    FFirst          ; Find first file
+                call    FDelete         ; Delete file
+                ret
+; End of function bczDelete
+; =============== S U B R O U T I N E =======================================
+sub_4BEC:
+                ld      hl, (pEndOfRtn) ; Pointer to the end of the loaded routine
+                ld      (pCurRtnLine), hl ; Pointer to current routine line
+                ret
+; End of function sub_4BEC
+; =============== S U B R O U T I N E =======================================
+; PrgPT to End
+AC112:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (pCurRtnLine) ; Pointer to current routine line
+                ex      de, hl
+                ld      hl, (pEndOfRtn) ; Pointer to the end of the loaded routine
+                or      a
+                sbc     hl, de
+                jp      z, AC1121
+                ld      hl, (pCurRtnLine) ; Pointer to current routine line
+                ld      (pTmp1), hl
+                call    LineWrite
+AC1121:
+                ret
+; End of function AC112
+; =============== S U B R O U T I N E =======================================
+sub_4C0D:
+                call    SSChk           ; Check for room on the syntax stack
+                call    sub_5A7B
+                ld      hl, (pEndOfRtn) ; Pointer to the end of the loaded routine
+                ex      de, hl
+                ld      hl, (pCurRtnLine) ; Pointer to current routine line
+                or      a
+                sbc     hl, de
+                jp      z, locret_4C3D
+                ld      hl, (pCurRtnLine) ; Pointer to current routine line
+                ld      (pTmp2), hl
+                ld      (pTmp4), hl
+loc_4C29:
+                ld      hl, (pTmp4)
+                inc     hl
+                ld      (pTmp4), hl
+                ld      a, (hl)
+                cp      0Ah
+                jp      nz, loc_4C29
+                inc     hl
+                ld      (pTmp4), hl
+                call    sub_5D7A
+locret_4C3D:
+                ret
+; End of function sub_4C0D
+; =============== S U B R O U T I N E =======================================
+; Put integer -1 on ToS
+AC115:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, ibcdVmin1
+                call    BCD5ToStr       ; Convert BCD5 in (HL) to string and push it
+                ret
+; End of function AC115
+; =============== S U B R O U T I N E =======================================
+; Body of $ZEXISTS function
+bfzExists:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, 2
+                ld      (FCBType), a    ; 0:Global, 1:Routine, 2:File
+                ld      a, (RoutinesDR) ; Default drive for routines (0-F)
+                ld      (Drive), a      ; Current disk drive
+                ld      hl, (pDevDrive)
+                ld      (pIndex), hl
+                ld      hl, Backslash
+                ld      (pTmp1), hl
+                ld      hl, pTmp1
+                ld      (pDevDrive), hl
+                call    FFirst          ; Find first file
+                ld      a, (Result)     ; Holds the result of called function
+                call    CharToStr       ; Convert char in A to string and push it
+                ld      hl, (pIndex)
+                ld      (pDevDrive), hl
+                ret
+; End of function bfzExists
+; =============== S U B R O U T I N E =======================================
+; Converts device # to short
+DevNtoShort:
+                call    SSChk           ; Check for room on the syntax stack
+                call    StrToChar       ; Converts a string on ToS to char (0-255)
+                ld      (DeviceInUse), a
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, Error52      ; Invalid device number
+                ld      a, 5
+                ld      hl, DeviceInUse
+                cp      (hl)
+                jp      c, Error52      ; Invalid device number
+                ld      a, (DeviceInUse)
+                ld      (ix+0), a
+                inc     ix
+                call    ZeroToS         ; Zero Top of Stack
+                ret
+; End of function DevNtoShort
+; =============== S U B R O U T I N E =======================================
+; Insert string at PRGPT
+AC118:
+                call    SSChk           ; Check for room on the syntax stack
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (CmdLineSz), a  ; Size of the command line
+                ld      (PTR), ix
+                ld      hl, (PTR)
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     hl, bc
+                ld      (PTR), hl
+                ld      (pTmp5), hl
+                call    LineInsert      ; Insert line ar PrgPT
+                ld      ix, (pTmp5)
+                call    SSChk           ; Check for room on the syntax stack
+                ret
+; End of function AC118
+; =============== S U B R O U T I N E =======================================
+AC119:
+                call    SSChk           ; Check for room on the syntax stack
+                dec     ix
+                ld      a, (ix+0)
+                ld      (Count), a
+AC1191:
+                ld      a, (Count)
+                or      a
+                jp      z, AC1194
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (StrLen), a     ; Length of the current string (plus 1)
+                or      a
+                jp      z, AC1193
+                cp      1
+                jp      nz, Error20     ; Illegal expression
+                dec     ix
+                ld      a, (ix+0)
+                ld      (tmpChar1), a
+                ld      hl, tmpChar1
+                ld      a, 11011111b    ; Uppercase mask
+                and     (hl)
+                ld      (hl), a
+                ld      a, (tmpChar1)
+                sub     41h             ; 'A'
+                ld      (tmpChar1), a
+                ld      a, (Count)
+                cp      1
+                jp      nz, AC1192
+                ld      a, (tmpChar1)
+                ld      (RoutinesDR), a ; Default drive for routines (0-F)
+                call    Null2           ; Does nothing
+                jp      AC1193
+; ---------------------------------------------------------------------------
+AC1192:                                 ; Close GLobals
+                call    GLBClose
+                ld      a, (tmpChar1)
+                ld      (GlobalsDR), a  ; Default drive for globals (0-F)
+AC1193:
+                ld      hl, Count
+                dec     (hl)
+                jp      AC1191
+; ---------------------------------------------------------------------------
+AC1194:                                 ; Close GLobals
+                call    GLBClose
+                call    DiskReset       ; Reset disk system
+                ret
+; End of function AC119
+; =============== S U B R O U T I N E =======================================
+sub_4D30:
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (I1), a
+                cp      1
+                jp      nz, Error30     ; Unimplemented operation
+                dec     ix
+                ld      a, (ix+0)
+                ld      (tmpChar2), a
+                ld      a, (Mode)
+                cp      1
+                jp      nz, locret_4D6D
+                ld      a, (tmpChar2)
+                cp      31h             ; '1'
+                jp      z, loc_4D66
+                cp      32h             ; '2'
+                jp      nz, Error30     ; Unimplemented operation
+                ld      hl, Auto
+                ld      a, (hl)
+                or      00000010b
+                ld      (hl), a
+                jp      locret_4D6D
+; ---------------------------------------------------------------------------
+loc_4D66:
+                ld      hl, Auto
+                ld      a, (hl)
+                or      00000100b
+                ld      (hl), a
+locret_4D6D:
+                ret
+; End of function sub_4D30
+; =============== S U B R O U T I N E =======================================
+sub_4D6E:
+                call    SSChk           ; Check for room on the syntax stack
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (tmpChar2), a
+                ld      (pTmp1), ix
+                ld      hl, (pTmp1)
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     hl, bc
+                ld      (pTmp1), hl
+                inc     hl
+                inc     hl
+                ld      (pTmp2), hl
+                ex      de, hl
+                ld      hl, (pTmp1)
+                ld      a, (tmpChar2)
+                call    ShiftUp         ; Shifts the stack towards its top
+                ld      (hl), 0
+                inc     hl
+                ld      (pTmp1), hl
+                ld      (hl), a
+                ld      hl, tmpChar2
+                inc     (hl)
+                inc     (hl)
+                ld      a, (tmpChar2)
+                ld      l, a
+                ld      h, 0
+                ld      (pTmp2), hl
+                call    PushP           ; Pushes pointer in HL onto the stack
+                ret
+; End of function sub_4D6E
+; =============== S U B R O U T I N E =======================================
+sub_4DB3:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (Vptr)
+                ld      (pTmp1), hl
+                ld      (NSTOS), ix
+                ld      hl, FReal
+                call    NumToStr        ; Converts a number in (HL) to a string and push it
+                call    AC47            ; Set values
+                ld      (pTmp1), ix
+                ld      a, (byte_04F3)
+                ld      (I1), a
+loc_4DD3:
+                ld      hl, (pTmp1)
+                dec     hl
+                dec     hl
+                ld      (pTmp1), hl
+                ld      a, (I1)
+                cp      1
+                jp      z, loc_4DF7
+                ld      a, (hl)
+                ld      (byte_04EC), a
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     hl, bc
+                ld      (pTmp1), hl
+                ld      hl, I1
+                dec     (hl)
+                jp      loc_4DD3
+; ---------------------------------------------------------------------------
+loc_4DF7:
+                ld      hl, (pTmp1)
+                ld      a, (hl)
+                ld      (byte_04ED), a
+                ld      a, (byte_04F3)
+                ld      (ix+0), a
+                inc     ix
+                ret
+; End of function sub_4DB3
+; =============== S U B R O U T I N E =======================================
+; Obtains the number of characters to read
+NumToRead:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, ibcdTemp0
+                call    StrToBCD        ; Converts string on ToS to BCD in (HL)
+                ld      c, 5
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jp      z, Error55      ; Invalid read count
+                ld      a, (hl)
+                and     11110000b
+                jp      nz, Error55     ; Invalid read count
+                call    BCD5ToChar      ; Converts BCD5 in (HL) into char in A
+                ld      (BytesToRead), a
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, locret_4E31
+                ld      a, 255
+                ld      (BytesToRead), a
+locret_4E31:
+                ret
+; End of function NumToRead
+; =============== S U B R O U T I N E =======================================
+; Body of $ZCHECK function
+bfcCheck:
+                call    SSChk           ; Check for room on the syntax stack
+                xor     a
+                ld      (tmpChar2), a
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (StrLen), a     ; Length of the current string (plus 1)
+                ld      (pTmp1), ix
+bfcCheck1:                              ; Length of the current string (plus 1)
+                ld      a, (StrLen)
+                or      a
+                jp      z, bfcCheck2
+                ld      hl, (pTmp1)
+                dec     hl
+                ld      (pTmp1), hl
+                ld      a, (hl)
+                ld      (tmpChar1), a
+                ld      hl, tmpChar2
+                xor     (hl)
+                ld      (hl), a
+                ld      hl, StrLen      ; Length of the current string (plus 1)
+                dec     (hl)
+                jp      bfcCheck1
+; ---------------------------------------------------------------------------
+bfcCheck2:
+                ld      ix, (pTmp1)
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (tmpChar2)
+                call    CharToStr       ; Convert char in A to string and push it
+                ret
+; End of function bfcCheck
+; =============== S U B R O U T I N E =======================================
+sub_4E73:
+                ld      (ix+0), 30h     ; '0'
+                inc     ix
+                ld      (ix+0), 1
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                ret
+; End of function sub_4E73
+; =============== S U B R O U T I N E =======================================
+sub_4E86:
+                ld      a, 1
+                ld      (byte_A6A4), a
+                ld      a, (Result)     ; Holds the result of called function
+                ld      (ix+0), a
+                inc     ix
+                ld      a, (Case)
+                ld      (ix+0), a
+                inc     ix
+                ret
+; End of function sub_4E86
+; =============== S U B R O U T I N E =======================================
+sub_4E9C:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, ibcdTemp0
+                call    StrToBCD        ; Converts string on ToS to BCD in (HL)
+                call    BCD5ToStr       ; Convert BCD5 in (HL) to string and push it
+                call    BCD5ToStr       ; Convert BCD5 in (HL) to string and push it
+                ret
+; End of function sub_4E9C
+; =============== S U B R O U T I N E =======================================
+sub_4EAC:
+                call    SSChk           ; Check for room on the syntax stack
+                call    sub_50CC
+                ld      a, (SubFL)      ; Set if variable has subscripts
+                or      a
+                jp      z, Error46      ; Subscript missing
+                call    sub_7974
+                ld      hl, glbptrUnk
+                ld      de, Nil
+                call    cp3BVal         ; Compare two 3 bytes values in (DE) and (HL)
+                jp      z, loc_4F60
+                call    sub_70A8
+                call    FindKey         ; Find place for a key
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, loc_4F60
+                call    sub_6CE3
+                call    sub_71EA
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, loc_4F60
+                ld      hl, (pTmp1)
+                ld      de, 2
+                add     hl, de
+                ld      a, (hl)
+                ld      (SubFL), a      ; Set if variable has subscripts
+                inc     hl
+                ld      (pVar), hl      ; Points to a var in the symbol table
+                ld      ix, (word_02A4)
+                call    SSChk           ; Check for room on the syntax stack
+                ld      (ix+0), Carat
+                inc     ix
+                ld      hl, (word_02F2)
+                inc     hl
+                ld      (word_02F2), hl
+                ld      a, (NameLen)    ; Length of the current variable name
+                call    PushAnoZ        ; Pushes A long value from (HL) if A not zero
+                ld      (word_02F2), hl
+                ld      (ix+0), LeftP
+                inc     ix
+                ld      hl, NameLen     ; Length of the current variable name
+                inc     (hl)
+                inc     (hl)
+                inc     (hl)
+                ld      a, 1
+                ld      (byte_A60F), a
+loc_4F21:
+                call    sub_5861
+                ld      a, (NameLen)    ; Length of the current variable name
+                ld      hl, tmpChar2
+                add     a, (hl)
+                ld      (NameLen), a    ; Length of the current variable name
+                ld      a, (SubFL)      ; Set if variable has subscripts
+                cp      1
+                jp      z, loc_4F47
+                ld      (ix+0), Comma
+                inc     ix
+                ld      hl, NameLen     ; Length of the current variable name
+                inc     (hl)
+                ld      hl, SubFL       ; Set if variable has subscripts
+                dec     (hl)
+                jp      loc_4F21
+; ---------------------------------------------------------------------------
+loc_4F47:
+                ld      (ix+0), RightP
+                inc     ix
+                xor     a
+                ld      (byte_A60F), a
+loc_4F51:                               ; Length of the current variable name
+                ld      a, (NameLen)
+                ld      (ix+0), a
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                ret
+; ---------------------------------------------------------------------------
+loc_4F60:
+                ld      ix, (word_02A4)
+                call    SSChk           ; Check for room on the syntax stack
+                xor     a
+                ld      (NameLen), a    ; Length of the current variable name
+                jp      loc_4F51
+; End of function sub_4EAC
+; =============== S U B R O U T I N E =======================================
+sub_4F6E:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (Index)
+                ld      (pIndex), hl
+                ld      a, 1
+                ld      (byte_A69F), a
+                ld      hl, (pTmp4)
+                ld      (Index), hl
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                ld      a, (StrLen)     ; Length of the current string (plus 1)
+                ld      (I1), a
+                ld      a, 0Fh
+                ld      (tmpChar2), a
+                ld      a, 0
+                ld      (ITX), a
+                ld      (Result), a     ; Holds the result of called function
+                ld      a, (I1)
+                cp      1
+                jp      nz, loc_4FA9
+                ld      hl, (Index)
+                ld      a, (hl)
+                cp      30h             ; '0'
+                jp      z, loc_5064
+loc_4FA9:
+                ld      a, (Token)
+                cp      tknMinus        ; Is it '-'?
+                jp      nz, loc_4FCF
+                ld      a, 1
+                ld      (ITX), a
+                ld      hl, (pTmp4)
+                inc     hl
+                ld      (pTmp4), hl
+                ld      hl, I1
+                dec     (hl)
+                ld      hl, StrLen      ; Length of the current string (plus 1)
+                dec     (hl)
+                ld      a, (I1)
+                or      a
+                jp      z, loc_5084
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+loc_4FCF:
+                ld      hl, tmpChar2
+                inc     (hl)
+                ld      a, (Token)
+                cp      tknPoint        ; Is it '.'?
+                jp      z, loc_5025
+                cp      tknNumber       ; Is it '0' to '9'?
+                jp      nz, loc_5084
+                ld      hl, (Index)
+                ld      a, (hl)
+                cp      30h             ; '0'
+                jp      z, loc_5084
+loc_4FE9:
+                ld      a, (ITX)
+                cp      0
+                jp      z, loc_4FFB
+                ld      a, 69h          ; 'i'
+                ld      hl, (Index)
+                sub     (hl)
+                ld      (I2), a
+                ld      (hl), a
+loc_4FFB:
+                ld      hl, I1
+                dec     (hl)
+                ld      hl, tmpChar2
+                inc     (hl)
+                ld      a, (tmpChar2)
+                cp      1Dh
+                jp      z, loc_5084
+                ld      a, (I1)
+                or      a
+                jp      z, loc_5064
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                ld      a, (Token)
+                cp      tknPoint        ; Is it '.'?
+                jp      z, loc_5025
+                cp      tknNumber       ; Is it '0' to '9'?
+                jp      nz, loc_5084
+                jp      loc_4FE9
+; ---------------------------------------------------------------------------
+loc_5025:
+                ld      hl, I1
+                dec     (hl)
+                ld      a, (I1)
+                or      a
+                jp      z, loc_5084
+loc_5030:                               ; Loads to (Token) the token code of char (++pStkPos)
+                call    GToken
+                ld      a, (Token)
+                cp      tknNumber       ; Is it '0' to '9'?
+                jp      nz, loc_5084
+                ld      hl, (Index)
+                ld      a, (hl)
+                ld      (Count), a
+                ld      a, (ITX)
+                cp      0
+                jp      z, loc_5051
+                ld      a, 69h          ; 'i'
+                sub     (hl)
+                ld      (I2), a
+                ld      (hl), a
+loc_5051:
+                ld      hl, I1
+                dec     (hl)
+                ld      a, (I1)
+                or      a
+                jp      nz, loc_5030
+                ld      a, (Count)
+                cp      30h             ; '0'
+                jp      z, loc_5084
+loc_5064:
+                ld      a, (ITX)
+                cp      0
+                jp      z, loc_507C
+                ld      a, 1Eh
+                ld      hl, tmpChar2
+                sub     (hl)
+                ld      (I2), a
+                ld      (tmpChar2), a
+                ld      hl, (Index)
+                inc     (hl)
+loc_507C:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                jp      loc_50BD
+; ---------------------------------------------------------------------------
+loc_5084:
+                ld      a, (ITX)
+                cp      0
+                jp      z, loc_50BD
+                ld      hl, (pTmp4)
+                inc     hl
+                ld      (Index), hl
+                ld      a, (StrLen)     ; Length of the current string (plus 1)
+                ld      hl, I1
+                sub     (hl)
+                ld      (I2), a
+loc_509D:                               ; 'i'
+                ld      a, 69h
+                ld      hl, (Index)
+                sub     (hl)
+                ld      (I1), a
+                ld      (hl), a
+                ld      hl, I2
+                dec     (hl)
+                ld      a, (I2)
+                or      a
+                jp      nz, loc_509D
+                ld      hl, StrLen      ; Length of the current string (plus 1)
+                inc     (hl)
+                ld      hl, (pTmp4)
+                dec     hl
+                ld      (pTmp4), hl
+loc_50BD:
+                ld      hl, (pIndex)
+                xor     a
+                ld      (byte_A69F), a
+                dec     hl
+                ld      (Index), hl
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                ret
+; End of function sub_4F6E
+; =============== S U B R O U T I N E =======================================
+sub_50CC:
+                call    SSChk           ; Check for room on the syntax stack
+                call    IXtoHL          ; Loads the value in (IX) into HL
+                ld      (word_02C0), hl
+                ld      (word_02F2), ix
+                ld      de, (word_02C0)
+                ld      hl, (word_02F2)
+                or      a
+                sbc     hl, de
+                ld      (word_02F2), hl
+                ld      (word_02A4), hl
+                ld      a, (hl)
+                ld      (SubFL), a      ; Set if variable has subscripts
+                inc     hl
+                ld      (word_02F2), hl
+                ld      a, (hl)
+                ld      (NameLen), a    ; Length of the current variable name
+                ld      c, a
+                ld      b, 0
+                add     hl, bc
+                inc     hl
+                ld      (word_A640), hl
+                ret
+; End of function sub_50CC
+; =============== S U B R O U T I N E =======================================
+sub_50FE:
+                ld      (pTmp1), ix
+                ld      hl, (pTmp1)
+                dec     hl
+                dec     hl
+                ld      e, (hl)
+                ld      d, 0
+                or      a
+                sbc     hl, de
+                dec     hl
+                ld      (pTmp1), hl
+                ret
+; End of function sub_50FE
+; =============== S U B R O U T I N E =======================================
+sub_5112:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (pDevEOFtmp)
+                ex      de, hl
+                ld      hl, (pDevEOF)
+                ld      a, (de)
+                cp      (hl)
+                jp      nz, loc_5175
+                ld      a, (IODevice)   ; Current IO device
+                or      a
+                jp      nz, loc_512E
+                call    sub_9998
+                jp      loc_5164
+; ---------------------------------------------------------------------------
+loc_512E:                               ; Current IO device
+                ld      a, (IODevice)
+                cp      5
+                jp      nz, loc_513C
+                call    sub_94A7
+                jp      loc_5164
+; ---------------------------------------------------------------------------
+loc_513C:
+                ld      hl, (pDevDrive)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      a, (hl)
+                ld      (Drive), a      ; Current disk drive
+                inc     hl
+                ld      (pDevFileName), hl
+                ld      hl, (pDevBuffer)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (pFRWBuffer), hl ; Pointer to file R/W buffer
+                ld      hl, (pDevIsOpen) ; 0=Closed 1=Open
+                ld      a, (hl)
+                and     00000010b
+                jp      z, loc_5161
+                call    FSeqWrite       ; Sequential write file (5 retries)
+loc_5161:
+                call    sub_9D7F
+loc_5164:
+                ld      hl, (pDevEOFtmp)
+                ld      (hl), 0
+                ld      hl, (pDevBuffer)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, (pDevRead)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+loc_5175:
+                ld      hl, (pDevRead)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (pTmp1), hl
+                ld      a, (hl)
+                ld      (tmpChar1), a
+                cp      1Ah
+if BINMODE
+                ; Binary file support
+                nop
+                nop
+                nop
+else
+                ; Regular file support
+                jp      z, locret_5197
+endif
+                inc     hl
+                ld      (pTmp1), hl
+                ex      de, hl
+                ld      hl, (pDevRead)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pDevEOFtmp)
+                inc     (hl)
+locret_5197:
+                ret
+; End of function sub_5112
+; =============== S U B R O U T I N E =======================================
+sub_5198:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      (ix+0), 1
+                inc     ix
+                ld      (word_0502), ix
+                ld      hl, (word_0502)
+                dec     hl
+                dec     hl
+                dec     hl
+                ld      e, (hl)
+                ld      d, 0
+                or      a
+                sbc     hl, de
+                ld      (pTmp1), hl
+                ld      (word_0510), hl
+                dec     hl
+                ld      a, (hl)
+                ld      (I1), a
+                dec     hl
+                ld      (pTmp1), hl
+                cp      1
+                jp      z, loc_51D3
+                ld      a, (hl)
+                ld      (I2), a
+                ld      a, (I1)
+                ld      hl, I2
+                add     a, (hl)
+                ld      (I1), a
+loc_51D3:
+                ld      hl, (pTmp1)
+                dec     hl
+                dec     hl
+                ld      e, (hl)
+                ld      d, 0
+                or      a
+                sbc     hl, de
+                ld      (pTmp1), hl
+                ld      hl, I1
+                dec     (hl)
+                ld      a, (I1)
+                or      a
+                jp      nz, loc_51D3
+                ld      ix, (pTmp1)
+                call    SSChk           ; Check for room on the syntax stack
+                dec     ix
+                ld      a, (ix+0)
+                ld      (IOTemp1), a
+                ld      a, 1
+                ld      (ForFL), a
+                ld      a, (IOTemp1)
+                cp      1
+                jp      z, loc_5215
+                call    sub_443E
+                ld      hl, (word_02F2)
+                ld      a, (hl)
+                or      10000000b
+                ld      (hl), a
+                jp      loc_5218
+; ---------------------------------------------------------------------------
+loc_5215:
+                call    sub_42C0
+loc_5218:
+                ld      (pTmp2), ix
+                ld      hl, (pTmp2)
+                ld      (word_0502), hl
+                dec     hl
+                dec     hl
+                ld      a, (hl)
+                ld      (I1), a
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     hl, bc
+                ld      (pTmp2), hl
+                ld      ix, (word_0510)
+                call    SSChk           ; Check for room on the syntax stack
+                dec     ix
+                ld      a, (ix+0)
+                ld      (Case), a
+                dec     ix
+                ld      a, (ix+0)
+                ld      (Result), a     ; Holds the result of called function
+                call    sub_52E3
+                ld      ix, (word_0502)
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (I3)
+                or      a
+                jp      z, locret_52E2
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, Error11      ; String too long
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (I1), a
+                ld      a, (I3)
+                ld      (tmpChar2), a
+                ld      a, (I1)
+                ld      l, a
+                ld      h, 0
+                ld      (pIndex), hl
+loc_527A:
+                ld      hl, (pIndex)
+                ld      a, (I2)
+                ld      c, a
+                ld      b, 0
+                add     hl, bc
+                ld      (pIndex), hl
+                ld      hl, tmpChar2
+                dec     (hl)
+                ld      a, (tmpChar2)
+                or      a
+                jp      nz, loc_527A
+                call    sub_9321
+                call    StrToChar       ; Converts a string on ToS to char (0-255)
+                ld      (I1), a
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, Error11      ; String too long
+loc_52A3:
+                ld      hl, (pTmp3)
+                ld      a, (I2)
+                call    PushAnoZ        ; Pushes A long value from (HL) if A not zero
+                ld      a, (I2)
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     hl, bc
+                ld      (pTmp3), hl
+                ld      hl, I3
+                dec     (hl)
+                ld      a, (I3)
+                or      a
+                jp      nz, loc_52A3
+                ld      (word_050C), ix
+                ld      a, (I1)
+                ld      (ix+0), a
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                xor     a
+                ld      (byte_0547), a
+                ld      (byte_0546), a
+                ld      hl, (word_050C)
+                ld      (word_050A), hl
+locret_52E2:
+                ret
+; End of function sub_5198
+; =============== S U B R O U T I N E =======================================
+sub_52E3:
+                call    SSChk           ; Check for room on the syntax stack
+                xor     a
+                ld      (I3), a
+                ld      a, (Case)
+                cp      1
+                jp      nz, loc_52FE
+                ld      de, ibcdTemp0
+                ld      hl, ibcdV1
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+                jp      loc_531A
+; ---------------------------------------------------------------------------
+loc_52FE:                               ; Holds the result of called function
+                ld      a, (Result)
+                cp      0
+                jp      z, loc_530C
+                ld      hl, ibcdTemp1
+                call    StrToBCD        ; Converts string on ToS to BCD in (HL)
+loc_530C:
+                ld      hl, ibcdTemp0
+                call    StrToBCD        ; Converts string on ToS to BCD in (HL)
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, loc_5323
+loc_531A:
+                ld      de, ibcdTemp1
+                ld      hl, ibcdTemp0
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+loc_5323:
+                ld      (word_050E), ix
+                ld      hl, (word_050E)
+                ld      bc, 0FFFEh
+                add     hl, bc
+                ld      a, (hl)
+                ld      (I2), a
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     hl, bc
+                ld      (word_050E), hl
+                ld      (pTmp3), hl
+                ld      a, (byte_0549)
+                or      a
+                jp      nz, loc_5359
+                ld      bc, 0FFFEh      ; 65534
+                add     hl, bc
+                ld      a, (hl)
+                ld      (I1), a
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     hl, bc
+                ld      (word_050E), hl
+                ld      (pTmp2), hl
+loc_5359:
+                ld      hl, ibcdTemp1
+                ld      a, (hl)
+                and     11110000b
+                jp      nz, loc_5493
+                ld      c, 5
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jp      z, loc_5493
+                ld      hl, ibcdTemp0
+                ld      a, (hl)
+                and     11110000b
+                jp      nz, loc_5376
+                jp      loc_537F
+; ---------------------------------------------------------------------------
+loc_5376:
+                ld      de, ibcdTemp0
+                ld      hl, ibcdV0
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+loc_537F:
+                ld      hl, ibcdTemp0
+                ld      de, ibcdTemp1
+                call    SCmp0           ; Compares two strings (sets BC=INTLN*257 first)
+                jp      c, loc_5493
+                ld      a, (I2)
+                or      a
+                jp      z, loc_545C
+                ld      c, 5
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jp      z, loc_53B0
+                ld      c, 5
+                call    DbcdHL          ; Decrements by 1 the C bytes long BCD in (HL)
+                call    BCD5ToChar      ; Converts BCD5 in (HL) into char in A
+                ld      (I3), a
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, loc_549F
+                jp      loc_53B4
+; ---------------------------------------------------------------------------
+loc_53B0:
+                xor     a
+                ld      (I3), a
+loc_53B4:
+                ld      a, (I3)
+                or      a
+                jp      z, loc_53F3
+                ld      hl, (pTmp3)
+                ex      de, hl
+                ld      hl, (pTmp2)
+                ld      a, (I1)
+                ld      b, a
+                ld      a, (I2)
+                call    sub_95A6
+                ld      (pTmp2), hl
+                ld      (tmpChar2), a
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, loc_543B
+                ld      a, (I1)
+                ld      hl, tmpChar2
+                sub     (hl)
+                ld      (I1), a
+                ld      hl, I3
+                dec     (hl)
+                ld      hl, ibcdTemp1
+                ld      c, 5
+                call    DbcdHL          ; Decrements by 1 the C bytes long BCD in (HL)
+                jp      loc_53B4
+; ---------------------------------------------------------------------------
+loc_53F3:
+                ld      hl, (pTmp2)
+                ld      (pTmp1), hl
+                ld      a, (I1)
+                ld      (tmpChar2), a
+loc_53FF:
+                ld      hl, (pTmp3)
+                ex      de, hl
+                ld      hl, (pTmp2)
+                ld      a, (I1)
+                ld      b, a
+                ld      a, (I2)
+                call    sub_95A6
+                ld      (pTmp2), hl
+                ld      (N), a
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, loc_5470
+                ld      a, (I1)
+                ld      hl, N
+                sub     (hl)
+                ld      (I1), a
+                ld      hl, ibcdTemp1
+                ld      c, 5
+                call    DbcdHL          ; Decrements by 1 the C bytes long BCD in (HL)
+                ld      c, 5
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jp      z, loc_5444
+                jp      loc_53FF
+; ---------------------------------------------------------------------------
+loc_543B:
+                ld      hl, (pTmp2)
+                ld      (pTmp1), hl
+                jp      loc_5474
+; ---------------------------------------------------------------------------
+loc_5444:
+                ld      a, (tmpChar2)
+                ld      hl, I1
+                sub     (hl)
+                ld      hl, I2
+                sub     (hl)
+                ld      (tmpChar2), a
+                ld      a, (I1)
+                add     a, (hl)
+                ld      (I1), a
+                jp      loc_5474
+; ---------------------------------------------------------------------------
+loc_545C:
+                ld      hl, (pTmp2)
+                ld      a, (I1)
+                ld      c, a
+                ld      b, 0
+                add     hl, bc
+                ld      (pTmp1), hl
+                xor     a
+                ld      (tmpChar2), a
+                ld      (I3), a
+loc_5470:
+                xor     a
+                ld      (I1), a
+loc_5474:
+                ld      a, (I1)
+                ld      (byte_0547), a
+                ld      a, (tmpChar2)
+                ld      (byte_0546), a
+                ld      hl, (pTmp1)
+                ld      (word_050C), hl
+                ld      c, a
+                ld      b, 0
+                add     hl, bc
+                ld      (word_050A), hl
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+locret_5492:
+                ret
+; ---------------------------------------------------------------------------
+loc_5493:
+                xor     a
+                ld      (byte_0546), a
+                ld      a, 0
+                ld      (Result), a     ; Holds the result of called function
+                jp      locret_5492
+; ---------------------------------------------------------------------------
+loc_549F:
+                ld      a, 255
+                ld      (I3), a
+                jp      locret_5492
+; End of function sub_52E3
+; =============== S U B R O U T I N E =======================================
+; Outputs the character on A to the current IODevice
+writeChar:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (IODevice)   ; Current IO device
+                or      a
+                jp      nz, writeChar1
+                ld      a, (tmpChar1)
+                call    putChar         ; Outputs the character on A to the console
+                ret
+; ---------------------------------------------------------------------------
+writeChar1:                             ; Current IO device
+                ld      a, (IODevice)
+                cp      1
+                jp      nz, writeChar2
+                ld      a, (tmpChar1)
+                call    PrtOut          ; Write a character to the printer device
+                ret
+; ---------------------------------------------------------------------------
+writeChar2:                             ; Current IO device
+                ld      a, (IODevice)
+                cp      5
+                jp      nz, writeChar3
+                call    AuxOut          ; Writes a character to the AUX device
+                ret
+; ---------------------------------------------------------------------------
+writeChar3:                             ; 0=Closed 1=Open
+                ld      hl, (pDevIsOpen)
+                ld      a, (hl)
+                and     00001000b
+                jp      nz, writeChar4
+                ld      hl, (pDevBuffer)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, (pDevRead)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pDevEOFtmp)
+                ld      (hl), 0
+writeChar4:                             ; 0=Closed 1=Open
+                ld      hl, (pDevIsOpen)
+                ld      a, (hl)
+                or      00000010b
+                ld      (hl), a
+                ld      hl, (pDevRead)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (pIndex), hl
+                ld      a, (tmpChar1)
+                ld      (hl), a
+                ld      hl, (pDevEOFtmp)
+                inc     (hl)
+                ld      hl, (pIndex)
+                inc     hl
+                ld      (pIndex), hl
+                ex      de, hl
+                ld      hl, (pDevRead)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pDevEOFtmp)
+                ex      de, hl
+                ld      hl, (pDevEOF)
+                ld      a, (de)
+                cp      (hl)
+                jp      nz, writeChar5
+                ld      hl, (pDevDrive)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      a, (hl)
+                ld      (Drive), a      ; Current disk drive
+                inc     hl
+                ld      (pDevFileName), hl
+                ld      hl, (pDevBuffer)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (pFRWBuffer), hl ; Pointer to file R/W buffer
+                call    FSeqWrite       ; Sequential write file (5 retries)
+                ld      hl, (pDevEOFtmp)
+                ld      (hl), 0
+                ld      hl, (pDevBuffer)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, (pDevRead)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+writeChar5:                             ; 0=Closed 1=Open
+                ld      hl, (pDevIsOpen)
+                ld      a, (hl)
+                or      00001000b
+                ld      (hl), a
+                ret
+; End of function writeChar
+; =============== S U B R O U T I N E =======================================
+sub_5555:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, 1
+                ld      (byte_A610), a
+                call    sub_5FDE
+                ld      a, 0
+                ld      (byte_A610), a
+                ld      hl, errIndex    ; Offset from the label where the error ocurred
+                call    StrToBCD        ; Converts string on ToS to BCD in (HL)
+                ld      hl, errLabel    ; (todo) Check this
+                call    pullNumber      ; Pulls a number in MStr format from the stack into (HL)
+                call    sub_5575
+                ret
+; End of function sub_5555
+; =============== S U B R O U T I N E =======================================
+sub_5575:
+                call    SSChk           ; Check for room on the syntax stack
+                call    IXtoHL          ; Loads the value in (IX) into HL
+                ld      (Index), hl
+                call    IXtoHL          ; Loads the value in (IX) into HL
+                ld      (pStkStart), hl
+                ld      a, (Mode)
+                cp      0
+                jp      nz, locret_559F
+                ld      de, (pStartOfRtn) ; Pointer to the start of the loaded routine
+                add     hl, de
+                ld      (pStkStart), hl
+                ld      de, (pStkStart)
+                ld      hl, (Index)
+                add     hl, de
+                ld      (Index), hl
+locret_559F:
+                ret
+; End of function sub_5575
+; =============== S U B R O U T I N E =======================================
+sub_55A0:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (Mode)
+                cp      0
+                jp      nz, loc_55C5
+                ld      de, (pStkStart)
+                ld      hl, (Index)
+                or      a
+                sbc     hl, de
+                ld      (Index), hl
+                ld      de, (pStartOfRtn) ; Pointer to the start of the loaded routine
+                ld      hl, (pStkStart)
+                or      a
+                sbc     hl, de
+                ld      (pStkStart), hl
+loc_55C5:
+                ld      hl, (pStkStart)
+                call    PushP           ; Pushes pointer in HL onto the stack
+                ld      hl, (Index)
+                call    PushP           ; Pushes pointer in HL onto the stack
+                ret
+; End of function sub_55A0
+; =============== S U B R O U T I N E =======================================
+sub_55D2:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (Mode)
+                cp      1
+                jp      z, loc_565E
+                ld      hl, (pStkStart)
+                ld      (pLineBefore), hl ; Pointer to the previous routine line
+                ld      hl, (Index)
+                ld      (pIndex), hl
+                call    sub_55A0
+                ld      hl, errLabel    ; Label where the error ocurred
+                call    PushSTR         ; Pushes a MStr into the stack
+                ld      hl, errIndex    ; Offset from the label where the error ocurred
+                call    BCD5ToStr       ; Convert BCD5 in (HL) to string and push it
+                ld      hl, (pRtnName)  ; Pointer to the current routine name
+                call    PushSTR         ; Pushes a MStr into the stack
+                ld      a, (IndFL)      ; Indirection flag
+                ld      (ix+0), a
+                inc     ix
+                ld      a, (ForSW)
+                ld      (ix+0), a
+                inc     ix
+                ld      a, (IndSW)
+                ld      (ix+0), a
+                inc     ix
+                ld      a, (DoSW)
+                ld      (ix+0), a
+                inc     ix
+                ld      a, (Mode)
+                ld      (ix+0), a
+                inc     ix
+                ld      a, (IODevice)   ; Current IO device
+                ld      (ix+0), a
+                inc     ix
+                xor     a
+                ld      (IndFL), a      ; Indirection flag
+                ld      (IndSW), a
+                ld      (ForSW), a
+                ld      (DoSW), a
+                ld      (IODevice), a   ; Current IO device
+                ld      hl, BreakFL     ; 1=On Break
+                inc     (hl)
+                ld      a, 1
+                ld      (Mode), a
+                ld      hl, (pLineBefore) ; Pointer to the previous routine line
+                ld      (pStkStart), hl
+                ld      hl, (pIndex)
+                ld      (Index), hl
+                ld      a, 7
+                ld      (bmFlag), a
+                call    putAsterisk     ; Places an asterisk under the error position
+                call    putErrLine
+loc_565E:
+                xor     a
+                ld      (Auto), a
+                ret
+; End of function sub_55D2
+; =============== S U B R O U T I N E =======================================
+sub_5663:
+                ld      a, (byte_A699)
+                or      a
+                jp      z, locret_5699
+                cp      1
+                jp      nz, Error48     ; Invalid parameter
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (tmpChar2), a
+                cp      1
+                jp      nz, Error48     ; Invalid parameter
+                dec     ix
+                ld      a, (ix+0)
+                cp      30h             ; '0'
+                jp      z, loc_5694
+                cp      31h             ; '1'
+                jp      nz, Error48     ; Invalid parameter
+                xor     a
+                ld      (byte_A6A2), a
+                jp      locret_5699
+; ---------------------------------------------------------------------------
+loc_5694:
+                ld      a, 255
+                ld      (byte_A6A2), a
+locret_5699:
+                ret
+; End of function sub_5663
+; =============== S U B R O U T I N E =======================================
+sub_569A:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (byte_A699)
+                cp      3
+                jp      nz, loc_56F4
+                ld      a, (tmpChar2)
+                cp      3
+                jp      nz, loc_56E1
+                ld      hl, (pTmp1)
+                dec     hl
+                ld      (pTmp1), hl
+                ld      a, (hl)
+                cp      44h             ; 'D'
+                jp      nz, loc_56E1
+                dec     hl
+                ld      (pTmp1), hl
+                ld      a, (hl)
+                cp      4Eh             ; 'N'
+                jp      nz, loc_56E1
+                dec     hl
+                ld      (pTmp1), hl
+                ld      a, (hl)
+                cp      45h             ; 'E'
+                jp      nz, loc_56E1
+                ld      de, ibcdTemp0
+                ld      hl, ibcdVmax
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+                ld      ix, (pTmp1)
+                call    SSChk           ; Check for room on the syntax stack
+                jp      locret_570C
+; ---------------------------------------------------------------------------
+loc_56E1:
+                ld      a, (tmpChar2)
+                or      a
+                jp      z, locret_570C
+                call    ExprToInt       ; Convert expression to integer
+                ld      hl, ibcdTemp0
+                call    StrToBCD        ; Converts string on ToS to BCD in (HL)
+                jp      locret_570C
+; ---------------------------------------------------------------------------
+loc_56F4:
+                ld      a, (byte_A699)
+                cp      4
+                jp      nz, Error48     ; Invalid parameter
+                ld      a, (tmpChar2)
+                or      a
+                jp      z, locret_570C
+                call    ExprToInt       ; Convert expression to integer
+                ld      hl, ibcdTemp1
+                call    StrToBCD        ; Converts string on ToS to BCD in (HL)
+locret_570C:
+                ret
+; End of function sub_569A
+; =============== S U B R O U T I N E =======================================
+sub_570D:
+                call    SSChk           ; Check for room on the syntax stack
+                dec     ix
+                ld      a, (ix+0)
+                ld      (byte_A699), a
+                ld      (tmpChar2), a
+                ld      (pTmp6), ix
+loc_571F:
+                ld      a, (tmpChar2)
+                or      a
+                jp      z, loc_573B
+                ld      hl, (pTmp6)
+                dec     hl
+                dec     hl
+                ld      e, (hl)
+                ld      d, 0
+                or      a
+                sbc     hl, de
+                ld      (pTmp6), hl
+                ld      hl, tmpChar2
+                dec     (hl)
+                jp      loc_571F
+; ---------------------------------------------------------------------------
+loc_573B:
+                ld      hl, (pTmp6)
+                dec     hl
+                ld      (pTmp6), hl
+                ld      a, (hl)
+                ld      (DeviceInUse), a
+                call    DevPrepare      ; Prepares current device for use
+                ret
+; End of function sub_570D
+; =============== S U B R O U T I N E =======================================
+; Prepares current device for use
+DevPrepare:
+                ld      hl, DevTable    ; HL points to the start of the device table
+                ld      (pTmp1), hl
+                ld      a, (DeviceInUse)
+                ld      (tmpChar2), a
+DevPrepare1:
+                ld      a, (tmpChar2)
+                or      a
+                jp      z, DevPrepare2
+                ld      hl, (pTmp1)
+                ld      de, 20
+                add     hl, de          ; HL points to the next device entry
+                ld      (pTmp1), hl
+                ld      hl, tmpChar2
+                dec     (hl)
+                jp      DevPrepare1
+; ---------------------------------------------------------------------------
+DevPrepare2:
+                ld      hl, (pTmp1)
+                ld      (pDevIsOpen), hl ; 0=Closed 1=Open
+                inc     hl
+                ld      (pTmp1), hl
+                ld      (pDevType), hl  ; 1=R/O 2=R/W
+                inc     hl
+                ld      (pTmp1), hl
+                ld      (pDevX), hl     ; X position (BCD5)
+                ld      de, 5
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      (pDevY), hl     ; Y position (BCD5)
+                ld      de, 5
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      (pDevEOF), hl
+                inc     hl
+                ld      (pTmp1), hl
+                ld      (pDevDrive), hl
+                ld      de, 2
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      (pDevBuffer), hl
+                ld      de, 2
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      (pDevRead), hl
+                ld      de, 2
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      (pDevEOFtmp), hl
+                ret
+; End of function DevPrepare
+; =============== S U B R O U T I N E =======================================
+sub_57BC:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, ibcdTemp0
+                ld      a, (hl)
+                and     11110000b
+                jp      nz, locret_5860
+                ld      hl, (pDevBuffer)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (pFRWBuffer), hl ; Pointer to file R/W buffer
+                ld      hl, (pDevBuffer)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, (pDevRead)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pDevEOFtmp)
+                ld      (hl), 0
+                ld      hl, (pDevIsOpen) ; 0=Closed 1=Open
+                ld      a, (hl)
+                and     00000010b
+                jp      z, loc_57EF
+                call    FSeqWrite       ; Sequential write file (5 retries)
+loc_57EF:
+                ld      hl, ibcdTemp0
+                ld      de, ibcdVmax
+                call    SCmp0           ; Compares two strings (sets BC=INTLN*257 first)
+                jp      z, loc_5826
+                call    FRndRead        ; Read random file record in DE
+                ld      hl, ibcdTemp1
+                ld      a, (hl)
+                and     11110000b
+                jp      nz, loc_5859
+                call    BCD5ToChar      ; Converts BCD5 in (HL) into char in A
+                ld      (tmpChar2), a
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, loc_5859
+loc_5815:
+                ld      a, (tmpChar2)
+                or      a
+                jp      z, loc_5842
+                call    sub_5112
+                ld      hl, tmpChar2
+                dec     (hl)
+                jp      loc_5815
+; ---------------------------------------------------------------------------
+loc_5826:                               ; Compute file size
+                call    FSize
+                ld      hl, ibcdTemp0
+                ld      c, INTLN        ; Size of an Integer (5)
+                call    DbcdHL          ; Decrements by 1 the C bytes long BCD in (HL)
+                call    FRndRead        ; Read random file record in DE
+loc_5834:
+                call    sub_5112
+                ld      a, (tmpChar1)
+                cp      EOF             ; ^Z=SUB/EOF
+                jp      z, loc_5842
+                jp      loc_5834
+; ---------------------------------------------------------------------------
+loc_5842:
+                ld      a, (tmpChar1)
+                cp      EOF             ; ^Z=SUB/EOF
+                jp      nz, loc_5852
+                ld      hl, (pDevType)  ; 1=R/O 2=R/W
+                ld      (hl), 1
+                jp      loc_5859
+; ---------------------------------------------------------------------------
+loc_5852:                               ; 0=Closed 1=Open
+                ld      hl, (pDevIsOpen)
+                ld      a, (hl)
+                or      00000100b
+                ld      (hl), a
+loc_5859:                               ; 0=Closed 1=Open
+                ld      hl, (pDevIsOpen)
+                ld      a, (hl)
+                or      00011000b
+                ld      (hl), a
+locret_5860:
+                ret
+; End of function sub_57BC
+; =============== S U B R O U T I N E =======================================
+sub_5861:
+                ld      hl, (pVar)      ; Points to a var in the symbol table
+                ld      a, (hl)
+                ld      (tmpChar2), a
+                ld      (I5), a
+                ld      (I6), a
+                inc     hl
+                ld      (pVar), hl      ; Points to a var in the symbol table
+                ld      a, 0
+                ld      (ITX), a
+                xor     a
+                ld      (I3), a
+                ld      a, (hl)
+                cp      0Fh
+                jp      c, loc_58A1
+                ld      a, (hl)
+                cp      Blank           ; Space
+                jp      c, loc_58B0
+                ld      a, (byte_A60F)
+                or      a
+                jp      z, loc_58C3
+                ld      a, 1
+                ld      (I3), a
+                ld      (ix+0), Quotes  ; "
+                inc     ix
+                ld      hl, tmpChar2
+                inc     (hl)
+                inc     (hl)
+                jp      loc_58C3
+; ---------------------------------------------------------------------------
+loc_58A1:
+                ld      a, 1
+                ld      (ITX), a
+                ld      (ix+0), Minus
+                inc     ix
+                ld      hl, tmpChar2
+                inc     (hl)
+loc_58B0:                               ; Points to a var in the symbol table
+                ld      hl, (pVar)
+                inc     hl
+                ld      (pVar), hl      ; Points to a var in the symbol table
+                ld      hl, tmpChar2
+                dec     (hl)
+                ld      hl, I5
+                dec     (hl)
+                ld      hl, I6
+                dec     (hl)
+loc_58C3:                               ; Points to a var in the symbol table
+                ld      hl, (pVar)
+                ld      a, (hl)
+                ld      (I2), a
+                ld      a, (byte_A60F)
+                or      a
+                jp      z, loc_58E3
+                ld      a, (I2)
+                cp      Quotes          ; "
+                jp      nz, loc_58E3
+                ld      (ix+0), Quotes  ; "
+                inc     ix
+                ld      hl, tmpChar2
+                inc     (hl)
+loc_58E3:
+                ld      a, (ITX)
+                cp      0
+                jp      z, loc_590E
+                ld      a, (I2)
+                cp      Point
+                jp      z, loc_58FF
+                ld      a, 69h          ; 'i'
+                ld      hl, I2
+                sub     (hl)
+                ld      (I1), a
+                ld      (I2), a
+loc_58FF:
+                ld      hl, I5
+                dec     (hl)
+                ld      a, (I5)
+                or      a
+                jp      nz, loc_590E
+                ld      hl, I2
+                inc     (hl)
+loc_590E:
+                ld      a, (I2)
+                ld      (ix+0), a
+                inc     ix
+                ld      hl, (pVar)      ; Points to a var in the symbol table
+                inc     hl
+                ld      (pVar), hl      ; Points to a var in the symbol table
+                ld      hl, I6
+                dec     (hl)
+                ld      a, (I6)
+                or      a
+                jp      nz, loc_58C3
+                ld      a, (I3)
+                or      a
+                jp      z, locret_5935
+                ld      (ix+0), Quotes  ; "
+                inc     ix
+locret_5935:
+                ret
+; End of function sub_5861
+; =============== S U B R O U T I N E =======================================
+; Make number into a string
+MkStr:
+                call    SSChk           ; Check for room on the syntax stack
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (StrLen), a     ; Length of the current string (plus 1)
+                ld      (PTR), ix
+                ld      hl, (PTR)
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     hl, bc
+                ld      (PTR), hl
+                xor     a
+                ld      (I4), a
+                ld      hl, (Index)
+                ld      (pIndex), hl
+                ld      a, 1
+                ld      (byte_A69F), a
+                ld      hl, (PTR)
+                dec     hl
+                ld      (Index), hl
+loc_5969:                               ; Length of the current string (plus 1)
+                ld      a, (StrLen)
+                or      a
+                jp      z, loc_5A01
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                ld      a, (Token)
+                cp      tknNumber       ; Is it '0' to '9'?
+                jp      z, loc_5999
+                cp      tknPoint        ; Is it '.'?
+                jp      z, loc_5999
+                cp      tknPlus         ; Is it '+'?
+                jp      z, loc_5992
+                cp      tknMinus        ; Is it '-'?
+                jp      nz, loc_5A01
+                ld      a, (I4)
+                xor     00000001b
+                ld      (I4), a
+loc_5992:                               ; Length of the current string (plus 1)
+                ld      hl, StrLen
+                dec     (hl)
+                jp      loc_5969
+; ---------------------------------------------------------------------------
+loc_5999:                               ; bit0:String
+                ld      hl, bmFlag1     ; bit1:Not
+                                        ; bit2:Dirty
+                                        ; bit4:Break
+                ld      a, (hl)
+                or      STRNG
+                ld      (hl), a
+                ld      (pTmp1), ix
+                ld      a, (tmpChar2)
+                or      a
+                jp      z, loc_59B1
+                call    NumLit          ; Check for numeric literal
+                jp      loc_59BA
+; ---------------------------------------------------------------------------
+loc_59B1:                               ; Length of the current string (plus 1)
+                ld      a, (StrLen)
+                ld      (I1), a
+                call    IntLit          ; Check for integer literal
+loc_59BA:                               ; bit0:String
+                ld      hl, bmFlag1     ; bit1:Not
+                                        ; bit2:Dirty
+                                        ; bit4:Break
+                ld      a, 11111110b
+                and     (hl)
+                ld      (hl), a
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      nz, loc_5A01
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (I1), a
+                ld      a, (I4)
+                or      a
+                jp      z, loc_59F1
+                ld      hl, (pTmp1)
+                inc     hl
+                ld      (pTmp7), hl
+                ex      de, hl
+                ld      hl, (pTmp1)
+                ld      a, (I1)
+                call    ShiftUp         ; Shifts the stack towards its top
+                ld      (hl), Minus
+                ld      hl, I1
+                inc     (hl)
+loc_59F1:
+                ld      hl, (PTR)
+                ex      de, hl
+                ld      hl, (pTmp1)
+                ld      a, (I1)
+                call    ShiftDn         ; Shifts the stack towards its base
+                jp      loc_5A13
+; ---------------------------------------------------------------------------
+loc_5A01:
+                ld      ix, (PTR)
+                call    SSChk           ; Check for room on the syntax stack
+                ld      (ix+0), 30h     ; '0'
+                inc     ix
+                ld      a, 1
+                ld      (I1), a
+loc_5A13:
+                ld      a, (I1)
+                ld      (ix+0), a
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                xor     a
+                ld      (byte_A69F), a
+                ld      hl, (pIndex)
+                dec     hl
+                ld      (Index), hl
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                ret
+; End of function MkStr
+; =============== S U B R O U T I N E =======================================
+CheckLS:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ld      a, (CmdLineSz)  ; Size of the command line
+                ld      (tmpChar2), a
+                xor     a
+                ld      (NameLen), a    ; Length of the current variable name
+                ld      hl, (PTR)
+                ld      (pIndex), hl
+CheckLS1:
+                ld      hl, (pIndex)
+                ld      a, (hl)
+                cp      9
+                jp      z, CheckLS2
+                inc     hl
+                ld      (pIndex), hl
+                ld      hl, NameLen     ; Length of the current variable name
+                inc     (hl)
+                ld      hl, tmpChar2
+                dec     (hl)
+                ld      a, (tmpChar2)
+                or      a
+                jp      nz, CheckLS1
+                ld      a, 0
+                ld      (Result), a     ; Holds the result of called function
+CheckLS2:
+                ret
+; End of function CheckLS
+; =============== S U B R O U T I N E =======================================
+sub_5A67:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                ld      bc, 0FFFBh
+                add     hl, bc
+                ld      (pIndex), hl
+                ld      bc, 0
+                call    sub_9A68
+                ret
+; End of function sub_5A67
+; =============== S U B R O U T I N E =======================================
+sub_5A7B:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (pTmp1)
+                ld      (word_A654), hl
+                ld      hl, (pRtnName)  ; Pointer to the current routine name
+                ld      (pTmp1), hl
+                call    sub_55A0
+                ld      a, 1
+                ld      (byte_A6A1), a
+                call    sub_5AA4
+                ld      a, 0
+                ld      (byte_A6A1), a
+                call    sub_5575
+                ld      hl, (word_A654)
+                ld      (pTmp1), hl
+                ret
+; End of function sub_5A7B
+; =============== S U B R O U T I N E =======================================
+sub_5AA4:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (pTmp1)
+                ex      de, hl
+                ld      hl, (word_9F96)
+                or      a
+                sbc     hl, de
+                jp      z, loc_5B2F
+                ld      a, (bmFlag1)    ; bit0:String
+                                        ; bit1:Not
+                                        ; bit2:Dirty
+                                        ; bit4:Break
+                and     DIRTY
+                jp      nz, Error42     ; Remove or save routine
+                ld      hl, (pTmp1)
+                ld      (pGlbBufferW), hl ; Pointer to global buffer to write
+                call    sub_5A67
+                ld      a, (byte_A6A1)
+                cp      1
+                jp      z, loc_5AD0
+                call    sub_63EE
+loc_5AD0:
+                ld      de, (word_9F96)
+                ld      hl, (pTmp1)
+                ld      a, 0Bh
+                call    CopyAup         ; Copy A bytes from (HL)->(DE) up
+                ld      hl, (pTmp1)
+                ld      (pGlbBufferW), hl ; Pointer to global buffer to write
+                ld      de, 9
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (word_A624), hl
+                ld      hl, (pTmp1)
+                ld      de, 6
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      hl, (word_9F98)
+                ld      (word_9F9A), hl
+                ld      de, (word_A624)
+                add     hl, de
+                ld      (word_A638), hl
+                ld      de, (pSymbolTbl) ; Pointer to the symbol table
+                or      a
+                sbc     hl, de
+                jp      c, loc_5B15
+                jp      loc_6088
+; ---------------------------------------------------------------------------
+loc_5B15:
+                ld      bc, (word_A624)
+                ld      hl, (word_9F9A)
+                ex      de, hl
+                ld      hl, (pTmp1)
+                call    CopyBCup        ; Copy BC bytes from (HL)->(DE) up
+                ld      (pTmp1), hl
+                ex      de, hl
+                ld      (word_9F9A), hl
+                ld      (hl), 1Ah
+                call    sub_629D
+loc_5B2F:
+                ld      hl, (word_9F96)
+                ld      (pRtnName), hl  ; Pointer to the current routine name
+                ld      bc, 0FFFBh
+                add     hl, bc
+                ld      (word_A636), hl
+                ld      hl, (word_9F98)
+                ld      (pStartOfRtn), hl ; Pointer to the start of the loaded routine
+                ld      hl, (word_9F9A)
+                ld      (pEndOfRtn), hl ; Pointer to the end of the loaded routine
+                ret
+; End of function sub_5AA4
+; =============== S U B R O U T I N E =======================================
+; Search routine for label
+FNDLB:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, 0
+                ld      (Result), a     ; Holds the result of called function
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (I1), a
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     ix, bc
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (INF)
+                cp      1
+                jp      z, FNDLBE
+                ld      (pTmp1), ix
+                ld      hl, (pStartOfRtn) ; Pointer to the start of the loaded routine
+                ld      (pTmp2), hl
+FNDLB1:
+                ld      hl, (pTmp2)
+                ld      a, (hl)
+                cp      1Ah             ; EOR
+                jp      z, FNDLBE
+                ld      (pTmp3), hl
+                ld      (pTmp6), hl
+                xor     a
+                ld      (tmpChar2), a
+FNDLB2:
+                ld      hl, (pTmp6)
+                ld      a, (hl)
+                cp      Blank           ; Space
+                jp      z, FNDLB3
+                ld      a, (hl)
+                cp      9
+                jp      z, FNDLB3
+                ld      hl, tmpChar2
+                inc     (hl)
+                ld      hl, (pTmp6)
+                inc     hl
+                ld      (pTmp6), hl
+                jp      FNDLB2
+; ---------------------------------------------------------------------------
+FNDLB3:
+                ld      a, (tmpChar2)
+                or      a
+                jp      z, FNDLB5
+                cp      8               ; (todo) NAMLN
+                jp      c, FNDLB4
+                ld      a, 8
+                ld      (tmpChar2), a
+FNDLB4:
+                ld      a, (tmpChar2)
+                ld      hl, I1
+                cp      (hl)
+                jp      nz, FNDLB5
+                ld      hl, (pTmp2)
+                ex      de, hl
+                ld      hl, (pTmp1)
+                ld      a, (I1)
+                ld      c, a
+                call    cpCStr          ; Compare C bytes long strings in (DE) and (HL)
+                jr      nz, FNDLB5
+                ld      (pTmp1), hl
+                ex      de, hl
+                ld      (pTmp2), hl
+                jp      FNDLB6
+; ---------------------------------------------------------------------------
+FNDLB5:
+                ld      hl, (pTmp2)
+                inc     hl
+                ld      (pTmp2), hl
+                ld      a, (hl)
+                cp      0Ah
+                jp      nz, FNDLB5
+                inc     hl
+                ld      (pTmp2), hl
+                jp      FNDLB1
+; ---------------------------------------------------------------------------
+FNDLB6:
+                ld      hl, (pTmp3)
+                ld      (pTmp2), hl
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+FNDLBE:
+                ret
+; End of function FNDLB
+; =============== S U B R O U T I N E =======================================
+sub_5BFC:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (word_A622)
+                ld      de, 9
+                add     hl, de
+                ld      (word_A622), hl
+loc_5C09:
+                ld      hl, (word_A62A)
+                ld      (pGlbBufferW), hl ; Pointer to global buffer to write
+                xor     a
+                ld      (byte_A692), a
+loc_5C13:                               ; Pointer to global buffer to write
+                ld      hl, (pGlbBufferW)
+                ex      de, hl
+                ld      hl, (word_A62A)
+                or      a
+                sbc     hl, de
+                jp      nz, loc_5C3D
+                ld      a, (byte_A692)
+                or      a
+                jp      nz, loc_5C2F
+                ld      a, 1
+                ld      (byte_A692), a
+                jp      loc_5C3D
+; ---------------------------------------------------------------------------
+loc_5C2F:
+                call    sub_6101
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, loc_5C09
+                jp      locret_5D1E
+; ---------------------------------------------------------------------------
+loc_5C3D:                               ; Pointer to global buffer to write
+                ld      hl, (pGlbBufferW)
+                inc     hl
+                ld      (word_A638), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (word_A630), hl
+                ld      de, (word_A622)
+                or      a
+                sbc     hl, de
+                jp      c, loc_5C58
+                jp      loc_5C6C
+; ---------------------------------------------------------------------------
+loc_5C58:                               ; Pointer to global buffer to write
+                ld      hl, (pGlbBufferW)
+                ld      de, 3
+                add     hl, de
+                ld      (pGlbBufferW), hl ; Pointer to global buffer to write
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (pGlbBufferW), hl ; Pointer to global buffer to write
+                jp      loc_5C13
+; ---------------------------------------------------------------------------
+loc_5C6C:
+                ld      hl, (word_A638)
+                ld      de, 2
+                add     hl, de
+                ld      (word_A638), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (word_A62A), hl
+                ld      de, (word_A622)
+                ld      hl, (word_A630)
+                or      a
+                sbc     hl, de
+                ld      (word_A630), hl
+                ld      de, 0FFCEh      ; 65486
+                add     hl, de
+                jp      nc, loc_5CD1
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                inc     hl
+                ld      (pGlbBufferW), hl ; Pointer to global buffer to write
+                ld      hl, (word_A630)
+                ex      de, hl
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                add     hl, de
+                ld      (pGlbBufferW), hl ; Pointer to global buffer to write
+                ld      hl, (word_A622)
+                ex      de, hl
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                dec     hl
+                ld      (pGlbBufferW), hl ; Pointer to global buffer to write
+                dec     hl
+                ld      (hl), Minus
+                ld      bc, 0FFFEh      ; 65534
+                add     hl, bc
+                ld      (word_A638), hl
+                ld      hl, (word_A630)
+                ex      de, hl
+                ld      hl, (word_A638)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                jp      loc_5CDA
+; ---------------------------------------------------------------------------
+loc_5CD1:                               ; Pointer to global buffer to write
+                ld      hl, (pGlbBufferW)
+                ld      bc, 3
+                call    sub_9A68
+loc_5CDA:                               ; Pointer to global buffer to write
+                ld      hl, (pGlbBufferW)
+                ld      (hl), Plus
+                inc     hl
+                ld      (word_A638), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, (word_A638)
+                add     hl, de
+                ld      bc, 0FFFEh      ; 65534
+                add     hl, bc
+                ld      (word_A638), hl
+                ld      (hl), Plus
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                ld      de, 3
+                add     hl, de
+                ld      (pGlbBufferW), hl ; Pointer to global buffer to write
+                ld      hl, (word_A632)
+                ex      de, hl
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                ld      bc, 0
+                call    sub_968F
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                ld      de, 4
+                add     hl, de
+                ld      a, (byte_A693)
+                ld      (hl), a
+                inc     hl
+                ld      (pGlbBufferW), hl ; Pointer to global buffer to write
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+locret_5D1E:
+                ret
+; End of function sub_5BFC
+; =============== S U B R O U T I N E =======================================
+sub_5D1F:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, 1
+                ld      (byte_A610), a
+                ld      hl, errLabel    ; Label where the error ocurred
+                ld      (pTmp1), hl
+                ld      (hl), 0
+                ld      de, errIndex    ; Offset from the label where the error ocurred
+                ld      hl, ibcdV0
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+                dec     ix
+                ld      a, (ix+0)
+                ld      (IOTemp1), a
+                or      a
+                jp      z, loc_5D4D
+                call    sub_5FDE
+                ld      hl, (pStartOfRtn) ; Pointer to the start of the loaded routine
+                ld      (pTmp2), hl
+loc_5D4D:                               ; Holds the result of called function
+                ld      a, (Result)
+                ld      (I3), a
+                ld      a, (IOTemp1)
+                cp      1
+                jp      z, loc_5D65
+                call    MV2LN           ; Move Ptr1 to Lineref
+                ld      a, (Result)     ; Holds the result of called function
+                or      a
+                jp      z, Error34      ; Invalid line reference
+loc_5D65:
+                ld      a, (I3)
+                ld      (Result), a     ; Holds the result of called function
+                ld      hl, (pTmp2)
+                ld      (pStkStart), hl
+                ld      (pCurRtnLine), hl ; Pointer to current routine line
+                ld      a, 0
+                ld      (byte_A610), a
+                ret
+; End of function sub_5D1F
+; =============== S U B R O U T I N E =======================================
+sub_5D7A:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (BreakFL)    ; 1=On Break
+                or      a
+                jp      nz, Error44     ; Illegal command during BREAK
+                ld      hl, (pTmp2)
+                ld      (pCurRtnLine), hl ; Pointer to current routine line
+                ld      bc, (pTmp2)
+                ld      hl, (pTmp4)
+                ex      de, hl
+                ld      hl, (pEndOfRtn) ; Pointer to the end of the loaded routine
+                call    sub_9721
+                ld      (pTmp2), hl
+                ex      de, hl
+                ld      (pTmp4), hl
+                ld      hl, (pTmp2)
+                ld      (pEndOfRtn), hl ; Pointer to the end of the loaded routine
+                ld      (hl), EOF       ; ^Z=SUB/EOF
+                ld      (word_9F9A), hl
+                call    sub_650E
+                ld      hl, bmFlag1     ; bit0:String
+                                        ; bit1:Not
+                                        ; bit2:Dirty
+                                        ; bit4:Break
+                ld      a, (hl)
+                or      DIRTY
+                ld      (hl), a
+                ret
+; End of function sub_5D7A
+; =============== S U B R O U T I N E =======================================
+; Insert line ar PrgPT
+LineInsert:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (BreakFL)    ; 1=On Break
+                or      a
+                jp      nz, Error44     ; Illegal command during BREAK
+                ld      a, (CmdLineSz)  ; Size of the command line
+                or      a
+                jp      z, Error00      ; Missing linestart character
+                call    sub_5A7B
+                ld      hl, (PTR)
+                ld      (pTmp4), hl
+                ld      (pIndex), hl
+                xor     a
+                ld      (tmpChar2), a
+LineInsert1:
+                ld      hl, (pIndex)
+                ld      a, (hl)
+                cp      Blank           ; Space
+                jp      z, LineInsert2
+                ld      a, (hl)
+                cp      9
+                jp      z, LineInsert2
+                ld      a, (hl)
+                cp      CR
+                jp      z, Error00      ; Missing linestart character
+                inc     hl
+                ld      (pIndex), hl
+                ld      hl, tmpChar2
+                inc     (hl)
+                jp      LineInsert1
+; ---------------------------------------------------------------------------
+LineInsert2:
+                ld      a, (tmpChar2)
+                or      a
+                jp      z, LineInsert4
+                ld      a, 1
+                ld      (byte_A69F), a
+                ld      hl, (Index)
+                ld      (pIndex), hl
+                ld      hl, (PTR)
+                dec     hl
+                ld      (Index), hl
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                call    LitLabel        ; Check for a literal label
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, LineInsert3
+                call    NumLabel        ; Check for a numeric label
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, Error28      ; Illegal routine or label name
+LineInsert3:                            ; Search routine for label
+                call    FNDLB
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, Error33      ; Duplicated label
+                xor     a
+                ld      (byte_A69F), a
+                ld      hl, (pIndex)
+                dec     hl
+                ld      (Index), hl
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+LineInsert4:                            ; Pointer to the end of the loaded routine
+                ld      hl, (pEndOfRtn)
+                ld      a, (CmdLineSz)  ; Size of the command line
+                ld      c, a
+                ld      b, 0
+                add     hl, bc
+                ld      de, 2
+                add     hl, de
+                ld      (pIndex), hl
+                ld      de, (pSymbolTbl) ; Pointer to the symbol table
+                or      a
+                sbc     hl, de
+                jp      c, LineInsert5
+                jp      Error10         ; Program larger than partition
+; ---------------------------------------------------------------------------
+LineInsert5:                            ; Pointer to the end of the loaded routine
+                ld      hl, (pEndOfRtn)
+                ld      (pTmp2), hl
+                ld      hl, (pIndex)
+                ld      (pEndOfRtn), hl ; Pointer to the end of the loaded routine
+                ld      hl, (pCurRtnLine) ; Pointer to current routine line
+                dec     hl
+                ld      (PTR), hl
+                ld      bc, (PTR)
+                ld      hl, (pIndex)
+                ex      de, hl
+                ld      hl, (pTmp2)
+                call    sub_972F
+                ld      (pTmp2), hl
+                ex      de, hl
+                ld      (pIndex), hl
+                ld      de, (pCurRtnLine) ; Pointer to current routine line
+                ld      hl, (pTmp4)
+                ld      a, (CmdLineSz)  ; Size of the command line
+                call    CopyAup         ; Copy A bytes from (HL)->(DE) up
+                ld      hl, (pCurRtnLine) ; Pointer to current routine line
+                ld      a, (CmdLineSz)  ; Size of the command line
+                ld      c, a
+                ld      b, 0
+                add     hl, bc
+                ld      (hl), CR
+                inc     hl
+                ld      (hl), LF
+                inc     hl
+                ld      (pCurRtnLine), hl ; Pointer to current routine line
+                ld      hl, (pEndOfRtn) ; Pointer to the end of the loaded routine
+                ld      (word_9F9A), hl
+                call    sub_650E
+                ld      hl, bmFlag1     ; bit0:String
+                                        ; bit1:Not
+                                        ; bit2:Dirty
+                                        ; bit4:Break
+                ld      a, (hl)
+                or      DIRTY
+                ld      (hl), a
+                ret
+; End of function LineInsert
+; =============== S U B R O U T I N E =======================================
+LineSet:
+                call    SSChk           ; Check for room on the syntax stack
+                call    MV2LN           ; Move Ptr1 to Lineref
+                ld      a, (Result)     ; Holds the result of called function
+                or      a
+                jp      z, Error34      ; Invalid line reference
+                ld      hl, (pTmp2)
+                ld      (pTmp4), hl
+                ld      a, (Case)
+                cp      1
+                jp      nz, LineSet2
+LineSet1:
+                ld      hl, (pTmp4)
+                inc     hl
+                ld      (pTmp4), hl
+                ld      a, (hl)
+                cp      0Ah
+                jp      nz, LineSet1
+                inc     hl
+                ld      (pTmp4), hl
+                ret
+; ---------------------------------------------------------------------------
+LineSet2:
+                ld      a, (Case)
+                cp      2
+                jp      nz, LineSet4
+                call    MV2LN           ; Move Ptr1 to Lineref
+                ld      a, (Result)     ; Holds the result of called function
+                or      a
+                jp      z, Error34      ; Invalid line reference
+                ld      de, (pTmp2)
+                ld      hl, (pTmp4)
+                or      a
+                sbc     hl, de
+                jp      c, Error34      ; Invalid line reference
+LineSet3:
+                ld      hl, (pTmp4)
+                inc     hl
+                ld      (pTmp4), hl
+                ld      a, (hl)
+                cp      0Ah
+                jp      nz, LineSet3
+                inc     hl
+                ld      (pTmp4), hl
+                ret
+; ---------------------------------------------------------------------------
+LineSet4:                               ; Pointer to the end of the loaded routine
+                ld      hl, (pEndOfRtn)
+                ld      (pTmp4), hl
+                ret
+; End of function LineSet
+; =============== S U B R O U T I N E =======================================
+LineWrite:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (pTmp1)
+                ld      (pTmp3), hl
+                xor     a
+                ld      (tmpChar2), a
+                ld      hl, (pDevIsOpen) ; 0=Closed 1=Open
+                ld      a, (hl)
+                and     00001000b
+                jp      nz, LineWrite1
+                ld      hl, (pDevBuffer)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, (pDevRead)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pDevEOFtmp)
+                ld      (hl), 0
+LineWrite1:
+                ld      hl, (pTmp1)
+                ld      a, (hl)
+                ld      (tmpChar1), a
+                cp      Blank           ; Space
+                jp      z, LineWrite2
+                cp      TAB
+                jp      z, LineWrite2
+                call    writeChar       ; Outputs the character on A to the current IODevice
+                ld      hl, tmpChar2
+                inc     (hl)
+                ld      hl, (pTmp1)
+                inc     hl
+                ld      (pTmp1), hl
+                ld      a, (tmpChar1)
+                cp      LF
+                jp      z, LineWrite7
+                jp      LineWrite1
+; ---------------------------------------------------------------------------
+LineWrite2:
+                ld      a, FF
+                ld      hl, tmpChar2
+                cp      (hl)
+                jp      c, LineWrite3
+                ld      hl, tmpChar2
+                sub     (hl)
+                ld      (NameLen), a    ; Length of the current variable name
+                jp      LineWrite4
+; ---------------------------------------------------------------------------
+LineWrite3:
+                ld      a, 5
+                ld      (NameLen), a    ; Length of the current variable name
+LineWrite4:                             ; Space
+                ld      a, Blank
+                ld      (tmpChar1), a
+                call    writeChar       ; Outputs the character on A to the current IODevice
+                ld      hl, NameLen     ; Length of the current variable name
+                dec     (hl)
+                ld      a, (NameLen)    ; Length of the current variable name
+                or      a
+                jp      nz, LineWrite4
+LineWrite5:
+                ld      hl, (pTmp1)
+                inc     hl
+                ld      (pTmp1), hl
+                ld      a, (hl)
+                cp      Blank           ; Space
+                jp      z, LineWrite5
+                ld      a, (hl)
+                cp      TAB
+                jp      z, LineWrite5
+LineWrite6:
+                ld      hl, (pTmp1)
+                ld      a, (hl)
+                ld      (tmpChar1), a
+                call    writeChar       ; Outputs the character on A to the current IODevice
+                ld      hl, (pTmp1)
+                inc     hl
+                ld      (pTmp1), hl
+                ld      a, (tmpChar1)
+                cp      LF
+                jp      nz, LineWrite6
+LineWrite7:                             ; 0=Closed 1=Open
+                ld      hl, (pDevIsOpen)
+                ld      a, (hl)
+                or      00001000b
+                ld      (hl), a
+                ld      hl, (pDevY)     ; Y position (BCD5)
+                ld      c, 5
+                call    IbcdHL          ; Increments by 1 the C bytes long BCD in (HL)
+                ld      hl, (pDevX)     ; X position (BCD5)
+                ld      de, ibcdV0
+                call    CopyIntDEHL     ; Copy INTLN bytes from (DE) to (HL) ; SetI
+                ret
+; End of function LineWrite
+; =============== S U B R O U T I N E =======================================
+sub_5FDE:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, errLabel    ; Label where the error ocurred
+                ld      (pTmp1), hl
+                ld      (hl), 0
+                ld      de, errIndex    ; Offset from the label where the error ocurred
+                ld      hl, ibcdV0
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+                ld      hl, TRtnName    ; Temp routine name storage
+                call    pullNumber      ; Pulls a number in MStr format from the stack into (HL)
+                ld      hl, TRtnName    ; Temp routine name storage
+                ld      (pTmp1), hl
+                ld      a, (hl)
+                or      a
+                jp      z, locret_6100
+                call    sub_6238
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, loc_6042
+                ld      a, (byte_A610)
+                cp      0
+                jp      z, loc_603C
+                ld      hl, (pTmp1)
+                ex      de, hl
+                ld      hl, (word_9F96)
+                or      a
+                sbc     hl, de
+                jp      z, loc_602C
+                ld      hl, (pTmp1)
+                ld      (pGlbBufferW), hl ; Pointer to global buffer to write
+                call    sub_6530
+loc_602C:
+                ld      hl, (pTmp1)
+                ld      (pRtnName), hl  ; Pointer to the current routine name
+                ld      de, 0Fh
+                add     hl, de
+                ld      (pTmp1), hl
+                jp      loc_60E5
+; ---------------------------------------------------------------------------
+loc_603C:
+                call    sub_5AA4
+                jp      locret_6100
+; ---------------------------------------------------------------------------
+loc_6042:
+                call    sub_63EE
+                ld      a, (RoutinesDR) ; Default drive for routines (0-F)
+                ld      (Drive), a      ; Current disk drive
+                ld      a, 1
+                ld      (FCBType), a    ; 0:Global, 1:Routine, 2:File
+                ld      hl, TRtnName    ; Temp routine name storage
+                call    PushSTR         ; Pushes a MStr into the stack
+                call    GFOpen          ; Open globals file
+                ld      hl, (word_9F96)
+                ld      (hl), 0
+                ld      hl, (word_9F98)
+                ld      (word_9F9A), hl
+                ld      hl, SaveRtnBuf
+                ld      (pFRWBuffer), hl ; Pointer to file R/W buffer
+loc_606A:
+                call    sub_9D7F
+                ld      hl, SaveRtnBuf
+                ld      (pTmp1), hl
+                ld      hl, (word_9F9A)
+                ld      de, (word_A622)
+                add     hl, de
+                ld      (pIndex), hl
+                ld      de, (pSymbolTbl) ; Pointer to the symbol table
+                or      a
+                sbc     hl, de
+                jp      c, loc_60A8
+loc_6088:
+                ld      hl, (word_9F98)
+                ld      (word_9F9A), hl
+                ld      (hl), EOF       ; ^Z=SUB/EOF
+                ld      hl, (word_9F96)
+                ld      (pRtnName), hl  ; Pointer to the current routine name
+                ld      hl, (word_9F98)
+                ld      (pStartOfRtn), hl ; Pointer to the start of the loaded routine
+                ld      (pEndOfRtn), hl ; Pointer to the end of the loaded routine
+                ld      hl, (pStartOfRtn) ; Pointer to the start of the loaded routine
+                ld      (pCurRtnLine), hl ; Pointer to current routine line
+                jp      Error10         ; Program larger than partition
+; ---------------------------------------------------------------------------
+loc_60A8:
+                ld      bc, (word_A622)
+                ld      hl, (word_9F9A)
+                ex      de, hl
+                ld      hl, (pTmp1)
+                call    CopyBCup        ; Copy BC bytes from (HL)->(DE) up
+                ld      (pTmp1), hl
+                ex      de, hl
+                ld      (word_9F9A), hl
+                ld      hl, (word_A622)
+                ld      de, 0FF80h      ; 65408
+                add     hl, de
+                jp      nc, loc_60CA
+                jp      loc_606A
+; ---------------------------------------------------------------------------
+loc_60CA:
+                ld      hl, (word_9F98)
+                ld      (pTmp1), hl
+                ld      hl, (word_9F9A)
+                ld      (hl), EOF       ; ^Z=SUB/EOF
+                ld      hl, (word_9F96)
+                ld      (pRtnName), hl  ; Pointer to the current routine name
+                ex      de, hl
+                ld      hl, TRtnName    ; Temp routine name storage
+                call    CopyHLDE        ; Copy (HL) bytes from (HL) to (DE)
+                call    sub_650E
+loc_60E5:
+                ld      hl, (pTmp1)
+                ld      (pStartOfRtn), hl ; Pointer to the start of the loaded routine
+                ld      de, (word_A624)
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      (pEndOfRtn), hl ; Pointer to the end of the loaded routine
+                ld      hl, (pRtnName)  ; Pointer to the current routine name
+                ld      bc, 0FFFBh      ; 65531
+                add     hl, bc
+                ld      (word_A636), hl
+locret_6100:
+                ret
+; End of function sub_5FDE
+; =============== S U B R O U T I N E =======================================
+sub_6101:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, 0
+                ld      (Result), a     ; Holds the result of called function
+                ld      hl, (word_A632)
+                ld      de, 2
+                add     hl, de
+                ld      (word_A638), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (pGlbBufferW), hl ; Pointer to global buffer to write
+                ex      de, hl
+                ld      hl, (word_A632)
+                or      a
+                sbc     hl, de
+                jp      z, locret_618A
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                ex      de, hl
+                ld      hl, (word_A636)
+                or      a
+                sbc     hl, de
+                jp      z, locret_618A
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                ld      bc, 0
+                call    sub_9A68
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                ld      de, 4
+                add     hl, de
+                ld      (pGlbBufferW), hl ; Pointer to global buffer to write
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                ld      a, (hl)
+                cp      52h             ; 'R'
+                jp      z, loc_617A
+                inc     hl
+                ld      (pGlbBufferW), hl ; Pointer to global buffer to write
+                ld      bc, 4
+                call    sub_9A68
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                ld      de, 3
+                add     hl, de
+                ld      (word_A638), hl
+                ld      a, (hl)
+                or      a
+                jp      z, loc_6187
+                ld      de, byte_0512
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                call    sub_980F
+                call    PrepGFCBWrite   ; Prepares global FCB for writing
+                jp      loc_6187
+; ---------------------------------------------------------------------------
+loc_617A:                               ; Pointer to global buffer to write
+                ld      hl, (pGlbBufferW)
+                inc     hl
+                ld      (pGlbBufferW), hl ; Pointer to global buffer to write
+                ld      bc, 0Bh
+                call    sub_9A68
+loc_6187:
+                call    sub_62F9
+locret_618A:
+                ret
+; End of function sub_6101
+; =============== S U B R O U T I N E =======================================
+; Move Ptr1 to Lineref
+MV2LN:
+                call    SSChk           ; Check for room on the syntax stack
+                dec     ix
+                ld      a, (ix+0)
+                ld      (tmpChar2), a
+                or      a
+                jp      nz, MV2LN1
+                ld      de, ibcdTemp0
+                ld      hl, ibcdV0
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+                jp      MV2LN2
+; ---------------------------------------------------------------------------
+MV2LN1:
+                ld      a, (tmpChar2)
+                ld      (ix+0), a
+                inc     ix
+                ld      hl, ibcdTemp0
+                call    StrToBCD        ; Converts string on ToS to BCD in (HL)
+MV2LN2:
+                ld      a, (DT)
+                cp      1
+                jp      z, MV2LN4
+                call    FNDLB           ; (todo)
+                ld      a, (Result)     ; Holds the result of called function
+                or      a
+                jp      z, MV2LNE
+                ld      a, (byte_A610)
+                cp      0
+                jp      z, MV2LN4
+                ld      a, (tmpChar2)
+                cp      8
+                jp      c, MV2LN3
+                ld      a, 8
+                ld      (tmpChar2), a
+MV2LN3:                                 ; Label where the error ocurred
+                ld      hl, errLabel
+                ld      a, (tmpChar2)
+                ld      (hl), a
+                inc     hl
+                ld      (pTmp1), hl
+                ld      de, (pTmp1)
+                ld      hl, (pTmp2)
+                call    CopyAup         ; Copy A bytes from (HL)->(DE) up
+                ld      de, errIndex    ; Offset from the label where the error ocurred
+                ld      hl, ibcdTemp0
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+MV2LN4:
+                ld      a, 0
+                ld      (Result), a     ; Holds the result of called function
+MV2LN5:
+                ld      hl, (pTmp2)
+                ex      de, hl
+                ld      hl, (pEndOfRtn) ; Pointer to the end of the loaded routine
+                or      a
+                sbc     hl, de
+                jp      z, MV2LNE
+                ld      hl, ibcdTemp0
+                ld      c, INTLN        ; Size of an Integer (5)
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jp      z, MV2LN7
+MV2LN6:
+                ld      hl, (pTmp2)
+                inc     hl
+                ld      (pTmp2), hl
+                ld      a, (hl)
+                cp      0Ah
+                jp      nz, MV2LN6
+                inc     hl
+                ld      (pTmp2), hl
+                ld      hl, ibcdTemp0
+                ld      c, INTLN        ; Size of an Integer (5)
+                call    DbcdHL          ; Decrements by 1 the C bytes long BCD in (HL)
+                jp      MV2LN5
+; ---------------------------------------------------------------------------
+MV2LN7:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+MV2LNE:
+                ret
+; End of function MV2LN
+; =============== S U B R O U T I N E =======================================
+sub_6238:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, 0
+                ld      (Result), a     ; Holds the result of called function
+                ld      hl, (word_A626)
+                ld      (pTmp1), hl
+loc_6246:
+                ld      hl, (pTmp1)
+                ld      (pIndex), hl
+                ld      hl, TRtnName    ; Temp routine name storage
+                ld      (pTmp3), hl
+                ex      de, hl
+                ld      hl, (pIndex)
+                call    sub_9558
+                ld      (pIndex), hl
+                ex      de, hl
+                ld      (pTmp3), hl
+                ld      (Case), a
+                cp      2
+                jp      z, loc_6286
+                ld      hl, (pTmp1)
+                ld      de, 0Bh
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (pTmp1), hl
+                ex      de, hl
+                ld      hl, (word_A626)
+                or      a
+                sbc     hl, de
+                jp      z, locret_629C
+                jp      loc_6246
+; ---------------------------------------------------------------------------
+loc_6286:
+                ld      hl, (pTmp1)
+                ld      de, 9
+                add     hl, de
+                ld      (pTmp3), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (word_A624), hl
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+locret_629C:
+                ret
+; End of function sub_6238
+; =============== S U B R O U T I N E =======================================
+sub_629D:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                dec     hl
+                ld      (word_A638), hl
+                ld      hl, (word_A638)
+                ld      a, (hl)
+                cp      52h             ; 'R'
+                jp      z, loc_62D7
+                ld      de, 4
+                add     hl, de
+                ld      (word_A638), hl
+                ld      a, (hl)
+                or      a
+                jp      z, loc_62C8
+                ld      de, byte_0512
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                call    sub_980F
+                call    PrepGFCBWrite   ; Prepares global FCB for writing
+loc_62C8:                               ; Pointer to global buffer to write
+                ld      hl, (pGlbBufferW)
+                ld      bc, 4
+                call    sub_9A68
+                call    sub_62F9
+                jp      locret_62F8
+; ---------------------------------------------------------------------------
+loc_62D7:                               ; Pointer to global buffer to write
+                ld      hl, (pGlbBufferW)
+                ld      bc, 0Bh
+                call    sub_9A68
+                call    sub_62F9
+                ld      hl, (word_9F96)
+                ld      (pRtnName), hl  ; Pointer to the current routine name
+                ld      hl, (word_9F98)
+                ld      (pStartOfRtn), hl ; Pointer to the start of the loaded routine
+                ld      (pCurRtnLine), hl ; Pointer to current routine line
+                ld      hl, (word_9F9A)
+                ld      (pEndOfRtn), hl ; Pointer to the end of the loaded routine
+locret_62F8:
+                ret
+; End of function sub_629D
+; =============== S U B R O U T I N E =======================================
+sub_62F9:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                ld      bc, 0FFF8h      ; 65528
+                add     hl, bc
+                ld      (pGlbBufferW), hl ; Pointer to global buffer to write
+                inc     hl
+                ld      (word_A638), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (word_A630), hl
+                ld      hl, (word_A638)
+                ld      bc, 0FFFEh      ; 65534
+                add     hl, bc
+                ld      (word_A638), hl
+                ld      a, (hl)
+                cp      Plus
+                jp      z, loc_635E
+                ld      bc, 0FFFEh      ; 65534
+                add     hl, bc
+                ld      (word_A638), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (word_A63A), hl
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                ld      de, (word_A63A)
+                or      a
+                sbc     hl, de
+                ld      (word_A63C), hl
+                ld      bc, 3
+                call    sub_9A68
+                ld      hl, (word_A63C)
+                ld      (pGlbBufferW), hl ; Pointer to global buffer to write
+                inc     hl
+                ld      (word_A63C), hl
+                ld      de, (word_A63A)
+                ld      hl, (word_A630)
+                add     hl, de
+                ld      (word_A630), hl
+                ex      de, hl
+                ld      hl, (word_A63C)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+loc_635E:                               ; Pointer to global buffer to write
+                ld      hl, (pGlbBufferW)
+                ld      de, (word_A630)
+                add     hl, de
+                ld      (word_A63C), hl
+                ld      a, (hl)
+                cp      Plus
+                jp      z, loc_63BE
+                ex      de, hl
+                ld      hl, (word_A62A)
+                or      a
+                sbc     hl, de
+                jp      nz, loc_637F
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                ld      (word_A62A), hl
+loc_637F:
+                ld      hl, (word_A63C)
+                ld      bc, 3
+                call    sub_9A68
+                ld      hl, (word_A63C)
+                inc     hl
+                ld      (word_A63C), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (word_A63A), hl
+                ld      de, (word_A63A)
+                ld      hl, (word_A630)
+                add     hl, de
+                ld      (word_A630), hl
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                inc     hl
+                ld      (word_A638), hl
+                ld      hl, (word_A630)
+                ex      de, hl
+                ld      hl, (word_A638)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      de, (word_A63A)
+                ld      hl, (word_A63C)
+                add     hl, de
+                dec     hl
+                ld      (word_A63C), hl
+loc_63BE:
+                ld      hl, (word_A63C)
+                dec     hl
+                ld      (word_A63C), hl
+                ld      (hl), Minus
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                ld      (hl), Minus
+                ld      hl, (word_A63C)
+                ld      bc, 0FFFEh      ; 65534
+                add     hl, bc
+                ld      (word_A63C), hl
+                ld      hl, (word_A630)
+                ex      de, hl
+                ld      hl, (word_A63C)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (word_A628)
+                ex      de, hl
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                ld      bc, 3
+                call    sub_968F
+                ret
+; End of function sub_62F9
+; =============== S U B R O U T I N E =======================================
+sub_63EE:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (bmFlag1)    ; bit0:String
+                                        ; bit1:Not
+                                        ; bit2:Dirty
+                                        ; bit4:Break
+                and     DIRTY
+                jp      nz, Error42     ; Remove or save routine
+                ld      hl, (pTmp1)
+                ld      (pTmp6), hl
+                ld      hl, (word_9F96)
+                ld      (pTmp1), hl
+                ld      a, (hl)
+                or      a
+                jp      z, loc_645F
+                ld      de, 9
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      de, 10h
+                add     hl, de
+                ld      (word_A622), hl
+                ld      a, 52h          ; 'R'
+                ld      (byte_A693), a
+                call    sub_5BFC
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, loc_645F
+                ld      hl, (word_A626)
+                ex      de, hl
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                ld      bc, 0Bh
+                call    sub_968F
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                ld      (pTmp1), hl
+                ld      hl, (word_9F96)
+                ld      (pTmp2), hl
+                call    sub_64D9
+                ld      bc, (word_A624)
+                ld      hl, (pTmp1)
+                ex      de, hl
+                ld      hl, (pTmp2)
+                call    CopyBCup        ; Copy BC bytes from (HL)->(DE) up
+                ld      (pTmp2), hl
+                ex      de, hl
+                ld      (pTmp1), hl
+                ld      (hl), 1Ah
+loc_645F:
+                ld      hl, (pTmp6)
+                ld      (pTmp1), hl
+                ret
+; End of function sub_63EE
+; =============== S U B R O U T I N E =======================================
+; Save routine
+SaveRtn:
+                call    SSChk           ; Check for room on the syntax stack
+                call    FCreate         ; Create file
+                ld      hl, (word_A624)
+                inc     hl
+                ld      (pTmp1), hl
+                ld      hl, (pStartOfRtn) ; Pointer to the start of the loaded routine
+                ld      (pTmp2), hl
+                ld      hl, 80h
+                ld      (pTmp4), hl
+                ld      hl, SaveRtnBuf
+                ld      (pFRWBuffer), hl ; Pointer to file R/W buffer
+SaveRtn1:
+                ld      hl, SaveRtnBuf
+                ld      (pTmp3), hl
+                ld      hl, (pTmp1)
+                ld      de, 65408
+                add     hl, de
+                jp      nc, SaveRtn2
+                ld      bc, (pTmp4)
+                ld      hl, (pTmp3)
+                ex      de, hl
+                ld      hl, (pTmp2)
+                call    CopyBCup        ; Copy BC bytes from (HL)->(DE) up
+                ld      (pTmp2), hl
+                ex      de, hl
+                ld      (pTmp3), hl
+                ld      de, (pTmp4)
+                ld      hl, (pTmp1)
+                or      a
+                sbc     hl, de
+                ld      (pTmp1), hl
+                call    FSeqWrite       ; Sequential write file (5 retries)
+                jp      SaveRtn1
+; ---------------------------------------------------------------------------
+SaveRtn2:
+                ld      bc, (pTmp1)
+                ld      hl, (pTmp3)
+                ex      de, hl
+                ld      hl, (pTmp2)
+                call    CopyBCup        ; Copy BC bytes from (HL)->(DE) up
+                ld      (pTmp2), hl
+                ex      de, hl
+                ld      (pTmp3), hl
+                call    FSeqWrite       ; Sequential write file (5 retries)
+                call    FClose          ; Close file
+                ret
+; End of function SaveRtn
+; =============== S U B R O U T I N E =======================================
+sub_64D9:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      de, (pTmp1)
+                ld      hl, (pTmp2)
+                ld      a, 0Bh
+                call    CopyAup         ; Copy A bytes from (HL)->(DE) up
+                ld      hl, (pTmp2)
+                ld      de, 9
+                add     hl, de
+                ld      (pTmp2), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (word_A624), hl
+                ld      hl, (pTmp2)
+                ld      de, 6
+                add     hl, de
+                ld      (pTmp2), hl
+                ld      hl, (pTmp1)
+                ld      de, 0Fh
+                add     hl, de
+                ld      (pTmp1), hl
+                ret
+; End of function sub_64D9
+; =============== S U B R O U T I N E =======================================
+sub_650E:
+                ld      hl, (word_9F9A)
+                ld      de, (word_9F98)
+                or      a
+                sbc     hl, de
+                ld      (word_A624), hl
+                ld      hl, (word_9F96)
+                ld      de, 9
+                add     hl, de
+                ld      (pTmp2), hl
+                ld      hl, (word_A624)
+                ex      de, hl
+                ld      hl, (pTmp2)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ret
+; End of function sub_650E
+; =============== S U B R O U T I N E =======================================
+sub_6530:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                dec     hl
+                ld      (pIndex), hl
+                ld      a, (hl)
+                cp      52h             ; 'R'
+                jp      z, loc_6559
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                ld      bc, 4
+                call    sub_9A68
+                ld      hl, (word_A634)
+                ex      de, hl
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                ld      bc, 4
+                call    sub_968F
+                jp      loc_656F
+; ---------------------------------------------------------------------------
+loc_6559:                               ; Pointer to global buffer to write
+                ld      hl, (pGlbBufferW)
+                ld      bc, 0Bh
+                call    sub_9A68
+                ld      hl, (word_A626)
+                ex      de, hl
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                ld      bc, 0Bh
+                call    sub_968F
+loc_656F:
+                ld      hl, (pIndex)
+                ld      bc, 0FFFCh
+                add     hl, bc
+                ld      (pIndex), hl
+                ld      bc, 0
+                call    sub_9A68
+                ld      hl, (word_A632)
+                ex      de, hl
+                ld      hl, (pIndex)
+                ld      bc, 0
+                call    sub_968F
+                ret
+; End of function sub_6530
+; =============== S U B R O U T I N E =======================================
+; Line to Stack
+Ln2Stk:
+                xor     a
+                ld      (tmpChar2), a
+                ld      a, (Result)     ; Holds the result of called function
+                or      a
+                jp      z, Ln2Stk5
+Ln2Stk1:
+                ld      hl, (pTmp2)
+                ld      a, (hl)
+                cp      Blank           ; Space
+                jp      z, Ln2Stk2
+                ld      a, (hl)
+                cp      9
+                jp      z, Ln2Stk2
+                ld      a, (hl)
+                cp      CR
+                jp      z, Error00      ; Missing linestart character
+                ld      a, (hl)
+                ld      (ix+0), a
+                inc     ix
+                inc     hl
+                ld      (pTmp2), hl
+                ld      hl, tmpChar2
+                inc     (hl)
+                jp      Ln2Stk1
+; ---------------------------------------------------------------------------
+Ln2Stk2:
+                ld      (ix+0), Blank
+                inc     ix
+                ld      hl, tmpChar2
+                inc     (hl)
+Ln2Stk3:
+                ld      hl, (pTmp2)
+                inc     hl
+                ld      (pTmp2), hl
+                ld      a, (hl)
+                cp      Blank           ; Space
+                jp      z, Ln2Stk3
+                ld      a, (hl)
+                cp      TAB
+                jp      z, Ln2Stk3
+                ld      a, (hl)
+                cp      CR
+                jp      z, Ln2Stk5
+Ln2Stk4:
+                ld      hl, (pTmp2)
+                ld      a, (hl)
+                ld      (ix+0), a
+                inc     ix
+                ld      a, (tmpChar2)
+                cp      255
+                jp      z, Error11      ; String too long
+                ld      hl, tmpChar2
+                inc     (hl)
+                ld      hl, (pTmp2)
+                inc     hl
+                ld      (pTmp2), hl
+                ld      a, (hl)
+                cp      CR
+                jp      nz, Ln2Stk4
+Ln2Stk5:
+                ld      a, (tmpChar2)
+                ld      (ix+0), a
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                ret
+; End of function Ln2Stk
+; =============== S U B R O U T I N E =======================================
+sub_6612:
+                call    SSChk           ; Check for room on the syntax stack
+                dec     ix
+                ld      a, (ix+0)
+                ld      (Mode), a
+                dec     ix
+                ld      a, (ix+0)
+                ld      (IndFL), a      ; Indirection flag
+                dec     ix
+                ld      a, (ix+0)
+                ld      (IndSW), a
+                dec     ix
+                ld      a, (ix+0)
+                ld      (ForSW), a
+                call    sub_5555
+                ld      hl, DoSW
+                dec     (hl)
+                ld      hl, (Index)
+                dec     hl
+                ld      (Index), hl
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                xor     a
+                ld      (bmFlag), a
+                ret
+; End of function sub_6612
+; =============== S U B R O U T I N E =======================================
+sub_664B:
+                call    SSChk           ; Check for room on the syntax stack
+                call    IXtoHL          ; Loads the value in (IX) into HL
+                ld      (Index), hl
+                ld      a, (Mode)
+                cp      0
+                jp      nz, loc_6664
+                ld      de, (pStkStart)
+                add     hl, de
+                ld      (Index), hl
+loc_6664:
+                ld      (pTmp1), ix
+                ld      hl, (pTmp1)
+                ld      (word_0502), hl
+                ld      bc, 0FFFDh
+                add     hl, bc
+                ld      a, (hl)
+                ld      (byte_04EC), a
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     hl, bc
+                ld      (pTmp1), hl
+                ld      (word_02F8), hl
+                ld      bc, 0FFFEh
+                add     hl, bc
+                ld      a, (hl)
+                ld      (byte_04ED), a
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     hl, bc
+                ld      (pTmp1), hl
+                ld      (word_02FE), hl
+                ld      bc, 0FFFEh
+                add     hl, bc
+                ld      (pTmp1), hl
+                ld      (Vptr), hl
+                ret
+; End of function sub_664B
+; =============== S U B R O U T I N E =======================================
+; Return from indirection
+IndRet:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (Index)
+                ld      (pTmp1), hl
+                ld      (pTmp3), hl
+                ld      (pTmp2), hl
+IndRet1:
+                ld      hl, (pTmp2)
+                ld      a, (hl)
+                cp      0Dh             ; End of indirection
+                jp      z, IndRet2
+                inc     hl
+                ld      (pTmp2), hl
+                jp      IndRet1
+; ---------------------------------------------------------------------------
+IndRet2:
+                ld      hl, (pTmp2)
+                ld      de, 8           ; (todo) SHTLN+SHTLN+PTRLN+SHTLN???
+                add     hl, de
+                ld      (pTmp2), hl
+                ld      (TPP), ix
+                ld      hl, (TPP)
+                ex      de, hl
+                ld      hl, (pTmp2)
+                or      a
+                sbc     hl, de
+                jp      z, IndRet4
+                ld      hl, (pTmp1)
+                inc     hl
+                ld      a, (hl)
+                ld      (tmpChar2), a
+                inc     hl
+                ld      (pTmp1), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (pIndex), hl
+                ld      hl, (pTmp1)
+                ld      de, 2
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (Index), hl
+                ld      hl, (pTmp1)
+                ld      de, 2
+                add     hl, de
+                ld      a, (hl)
+                ld      (IndFL), a      ; Indirection flag
+                inc     hl
+                ld      a, (hl)
+                ld      (Mode), a
+                inc     hl
+                ld      (pTmp1), hl
+                cp      0
+                jp      nz, IndRet3
+                ld      hl, (pIndex)
+                ld      de, (pStartOfRtn) ; Pointer to the start of the loaded routine
+                add     hl, de
+                ld      (pStkStart), hl
+                ld      de, (pStkStart)
+                ld      hl, (Index)
+                add     hl, de
+                ld      (Index), hl
+IndRet3:
+                ld      (pTmp2), ix
+                ld      de, (pTmp1)
+                ld      hl, (pTmp2)
+                or      a
+                sbc     hl, de
+                ld      (pTmp2), hl
+                ld      hl, tmpChar2
+                dec     (hl)
+                ld      hl, (pTmp3)
+                ld      a, (tmpChar2)
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     hl, bc
+                ld      (pTmp3), hl
+                ld      ix, (pTmp3)
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (pTmp1)
+                ld      bc, (pTmp2)
+                call    PushHLnoZ       ; Pushes BC long value from (HL) if BC not zero
+                ld      (pTmp1), hl
+                jp      IndRetEnd
+; ---------------------------------------------------------------------------
+IndRet4:
+                dec     ix
+                ld      a, (ix+0)
+                ld      (Mode), a
+                dec     ix
+                ld      a, (ix+0)
+                ld      (IndFL), a      ; Indirection flag
+                call    IXtoHL          ; Loads the value in (IX) into HL
+                ld      (Index), hl
+                call    IXtoHL          ; Loads the value in (IX) into HL
+                ld      (pStkStart), hl
+                ld      a, (Mode)
+                cp      0
+                jp      nz, IndRet5
+                ld      de, (pStartOfRtn) ; Pointer to the start of the loaded routine
+                add     hl, de
+                ld      (pStkStart), hl
+                ld      de, (pStkStart)
+                ld      hl, (Index)
+                add     hl, de
+                ld      (Index), hl
+IndRet5:
+                dec     ix
+                ld      a, (ix+0)
+                ld      (StrLen), a     ; Length of the current string (plus 1)
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     ix, bc
+                call    SSChk           ; Check for room on the syntax stack
+IndRetEnd:
+                ld      hl, (Index)
+                dec     hl
+                ld      (Index), hl
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                ret
+; End of function IndRet
+; =============== S U B R O U T I N E =======================================
+sub_67BD:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, 4
+                ld      (I1), a
+loc_67C5:                               ; Space
+                ld      (ix+0), Blank
+                inc     ix
+                ld      hl, I1
+                dec     (hl)
+                ld      a, (I1)
+                or      a
+                jp      nz, loc_67C5
+                ld      (ix+0), 4
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                call    Write
+                xor     a
+                ld      (NameLen), a    ; Length of the current variable name
+                ld      a, 1
+                ld      (byte_A60F), a
+loc_67EE:
+                call    sub_5861
+                ld      a, (NameLen)    ; Length of the current variable name
+                ld      hl, tmpChar2
+                add     a, (hl)
+                ld      (NameLen), a    ; Length of the current variable name
+                ld      a, (SubFL)      ; Set if variable has subscripts
+                cp      1
+                jp      z, loc_6814
+                ld      (ix+0), Comma
+                inc     ix
+                ld      hl, NameLen     ; Length of the current variable name
+                inc     (hl)
+                ld      hl, SubFL       ; Set if variable has subscripts
+                dec     (hl)
+                jp      loc_67EE
+; ---------------------------------------------------------------------------
+loc_6814:
+                xor     a
+                ld      (byte_A60F), a
+                ld      a, (NameLen)    ; Length of the current variable name
+                ld      (ix+0), a
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                call    Write
+                ld      (ix+0), Blank   ; Space
+                inc     ix
+                ld      (ix+0), Quotes  ; "
+                inc     ix
+                ld      (ix+0), 2
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                call    Write
+                ld      hl, (pVar)      ; Points to a var in the symbol table
+                call    PushSTR         ; Pushes a MStr into the stack
+                call    Write
+                ld      (ix+0), Quotes  ; "
+                inc     ix
+                ld      (ix+0), 1
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                call    Write
+                call    PrintCRLF
+                ret
+; End of function sub_67BD
+; =============== S U B R O U T I N E =======================================
+sub_6866:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (pTmp2)
+                inc     hl
+                ld      (pTmp2), hl
+loc_6870:
+                ld      hl, ibcd1
+                ld      c, 5
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jp      z, locret_68D4
+                ld      hl, (pTmp2)
+                ld      a, (hl)
+                ld      (byte_04B8), a
+                inc     hl
+                ld      (pTmp5), hl
+loc_6886:
+                ld      a, (byte_04B8)
+                or      a
+                jp      z, loc_68BB
+                ld      hl, (Index)
+                ex      de, hl
+                ld      hl, (pTmp3)
+                or      a
+                sbc     hl, de
+                jp      z, loc_68CE
+                ld      hl, (Index)
+                ex      de, hl
+                ld      hl, (pTmp5)
+                ld      a, (de)
+                cp      (hl)
+                jp      nz, loc_68CE
+                ld      hl, (Index)
+                inc     hl
+                ld      (Index), hl
+                ld      hl, (pTmp5)
+                inc     hl
+                ld      (pTmp5), hl
+                ld      hl, byte_04B8
+                dec     (hl)
+                jp      loc_6886
+; ---------------------------------------------------------------------------
+loc_68BB:
+                ld      hl, ibcd1
+                ld      c, 5
+                call    DbcdHL          ; Decrements by 1 the C bytes long BCD in (HL)
+                ld      hl, ibcdUnk05
+                ld      c, 5
+                call    DbcdHL          ; Decrements by 1 the C bytes long BCD in (HL)
+                jp      loc_6870
+; ---------------------------------------------------------------------------
+loc_68CE:
+                ld      a, (ibcdVmin1)
+                ld      (ibcd1), a
+locret_68D4:
+                ret
+; End of function sub_6866
+; =============== S U B R O U T I N E =======================================
+sub_68D5:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (pTmp2)
+                inc     hl
+                ld      (pTmp2), hl
+loc_68DF:
+                ld      hl, ibcd1
+                ld      c, 5
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jp      z, locret_69DC
+                ld      hl, (pTmp2)
+                ld      a, (hl)
+                ld      (byte_04B8), a
+                inc     hl
+                ld      (pTmp5), hl
+                ld      hl, (Index)
+                dec     hl
+                ld      (Index), hl
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+loc_68FF:
+                ld      hl, (Index)
+                ex      de, hl
+                ld      hl, (pTmp3)
+                or      a
+                sbc     hl, de
+                jp      z, loc_69D3
+                ld      a, (byte_04B8)
+                or      a
+                jp      z, loc_69D3
+                ld      hl, (pTmp5)
+                ld      a, (hl)
+                ld      (tmpChar1), a
+                inc     hl
+                ld      (pTmp5), hl
+                ld      hl, byte_04B8
+                dec     (hl)
+                ld      a, (tmpChar1)
+                cp      41h             ; 'A'
+                jp      nz, loc_693A
+                ld      a, (Token)
+                cp      tknUppercase    ; Is it 'A' to 'Z'?
+                jp      z, loc_69B9
+                cp      tknLowercase    ; Is it 'a' to 'z'?
+                jp      z, loc_69B9
+                jp      loc_68FF
+; ---------------------------------------------------------------------------
+loc_693A:
+                ld      a, (tmpChar1)
+                cp      4Eh             ; 'N'
+                jp      nz, loc_694D
+                ld      a, (Token)
+                cp      tknNumber       ; Is it '0' to '9'?
+                jp      z, loc_69B9
+                jp      loc_68FF
+; ---------------------------------------------------------------------------
+loc_694D:
+                ld      a, (tmpChar1)
+                cp      55h             ; 'U'
+                jp      nz, loc_6960
+                ld      a, (Token)
+                cp      tknUppercase    ; Is it 'A' to 'Z'?
+                jp      z, loc_69B9
+                jp      loc_68FF
+; ---------------------------------------------------------------------------
+loc_6960:
+                ld      a, (tmpChar1)
+                cp      4Ch             ; 'L'
+                jp      nz, loc_6973
+                ld      a, (Token)
+                cp      tknLowercase    ; Is it 'a' to 'z'?
+                jp      z, loc_69B9
+                jp      loc_68FF
+; ---------------------------------------------------------------------------
+loc_6973:
+                ld      a, (tmpChar1)
+                cp      50h             ; 'P'
+                jp      nz, loc_698F
+                ld      a, (Token)
+                cp      tknQuote        ; Is it '''?
+                jp      c, loc_68FF
+                ld      a, tknCurlR
+                ld      hl, Token
+                cp      (hl)
+                jp      c, loc_68FF
+                jp      loc_69B9
+; ---------------------------------------------------------------------------
+loc_698F:
+                ld      a, (tmpChar1)
+                cp      45h             ; 'E'
+                jp      nz, loc_69A1
+                ld      a, (Token)
+                or      a
+                jp      nz, loc_69B9
+                jp      loc_68FF
+; ---------------------------------------------------------------------------
+loc_69A1:
+                ld      a, (tmpChar1)
+                cp      43h             ; 'C'
+                jp      nz, loc_69B4
+                ld      a, (Token)
+                cp      tknTAB          ; It is TAB?
+                jp      c, loc_68FF
+                jp      loc_69B9
+; ---------------------------------------------------------------------------
+loc_69B4:                               ; '5'
+                ld      a, 35h
+                call    PrintErr        ; Outputs error message
+loc_69B9:
+                ld      hl, (Index)
+                inc     hl
+                ld      (Index), hl
+                ld      hl, ibcd1
+                ld      c, INTLN        ; Size of an Integer (5)
+                call    DbcdHL          ; Decrements by 1 the C bytes long BCD in (HL)
+                ld      hl, ibcdUnk05
+                ld      c, INTLN        ; Size of an Integer (5)
+                call    DbcdHL          ; Decrements by 1 the C bytes long BCD in (HL)
+                jp      loc_68DF
+; ---------------------------------------------------------------------------
+loc_69D3:
+                ld      de, ibcd1
+                ld      hl, ibcdVmin1
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+locret_69DC:
+                ret
+; End of function sub_68D5
+; =============== S U B R O U T I N E =======================================
+sub_69DD:
+                call    SSChk           ; Check for room on the syntax stack
+                dec     ix
+                ld      a, (ix+0)
+                ld      (Mode), a
+                dec     ix
+                ld      a, (ix+0)
+                ld      (IndFL), a      ; Indirection flag
+                dec     ix
+                ld      a, (ix+0)
+                ld      (ForSW), a
+                call    sub_5555
+                dec     ix
+                ld      a, (ix+0)
+                ld      (N), a
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     ix, bc
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, IndSW
+                dec     (hl)
+                xor     a
+                ld      (bmFlag), a
+                ld      hl, (Index)
+                dec     hl
+                ld      (Index), hl
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                ld      a, 0
+                ld      (GotoFL), a
+                ret
+; End of function sub_69DD
+; =============== S U B R O U T I N E =======================================
+sub_6A25:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (SubFL)      ; Set if variable has subscripts
+                ld      (I5), a
+                ld      hl, (word_02F2)
+                ex      de, hl
+                ld      hl, (pTmp1)
+                call    sub_96B9
+                ld      (I5), a
+                ld      (pVar), hl      ; Points to a var in the symbol table
+                ld      a, 0
+                ld      (Result), a     ; Holds the result of called function
+                ld      a, (SubFL)      ; Set if variable has subscripts
+                ld      hl, I5
+                cp      (hl)
+                jp      c, locret_6A52
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+locret_6A52:
+                ret
+; End of function sub_6A25
+; =============== S U B R O U T I N E =======================================
+sub_6A53:
+                ld      hl, (pSymbolTbl) ; Pointer to the symbol table
+                ld      de, 2
+                add     hl, de
+                ld      (pIndex), hl
+                ld      (PtrX), hl
+                ld      hl, 0
+                ld      (pTmp1), hl
+loc_6A66:
+                ld      hl, (pTmp1)
+                inc     hl
+                inc     hl
+                ld      (pTmp1), hl
+                ld      de, (pTmp1)
+                ld      hl, (SymCount)  ; Number of symbols defined
+                or      a
+                sbc     hl, de
+                jp      c, loc_6A8B
+                ld      hl, (pIndex)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, (pIndex)
+                add     hl, de
+                ld      (pIndex), hl
+                jp      loc_6A66
+; ---------------------------------------------------------------------------
+loc_6A8B:
+                ld      de, (PtrX)
+                ld      hl, (pIndex)
+                or      a
+                sbc     hl, de
+                ld      (pIndex), hl
+                ret
+; End of function sub_6A53
+; =============== S U B R O U T I N E =======================================
+sub_6A99:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (pSymbolTbl) ; Pointer to the symbol table
+                ld      (pTmp1), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (pIndex), hl
+                ld      hl, (pTmp1)
+                ld      de, 2
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      (pTmp8), hl
+                ld      de, (pIndex)
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      a, (SubFL)      ; Set if variable has subscripts
+                ld      (I5), a
+                ld      hl, (word_02F2)
+                ex      de, hl
+                ld      hl, (pTmp1)
+                call    sub_96B9
+                ld      (I5), a
+                ld      (pVar), hl      ; Points to a var in the symbol table
+                ld      a, (Case)
+                cp      2
+                jp      z, loc_6B22
+                cp      3
+                jp      z, loc_6B0A
+                ld      hl, (pTmp8)
+                ld      (pTmp1), hl
+loc_6AE7:                               ; Set if variable has subscripts
+                ld      a, (SubFL)
+                ld      (I5), a
+                ld      hl, (word_02F2)
+                ex      de, hl
+                ld      hl, (pTmp1)
+                call    sub_96B9
+                ld      (I5), a
+                ld      (pVar), hl      ; Points to a var in the symbol table
+                ld      a, (Case)
+                cp      2
+                jp      z, loc_6B22
+                cp      1
+                jp      z, loc_6B1A
+loc_6B0A:
+                ld      hl, (pTmp1)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, (pTmp1)
+                add     hl, de
+                ld      (pTmp1), hl
+                jp      loc_6AE7
+; ---------------------------------------------------------------------------
+loc_6B1A:
+                ld      a, 0
+                ld      (Result), a     ; Holds the result of called function
+                jp      locret_6B27
+; ---------------------------------------------------------------------------
+loc_6B22:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+locret_6B27:
+                ret
+; End of function sub_6A99
+; =============== S U B R O U T I N E =======================================
+sub_6B28:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (pTmp1)
+                ld      (pTmp2), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, (pTmp1)
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      (pTmp6), hl
+                dec     hl
+                ld      (pTmp1), hl
+                ld      hl, (pTmp2)
+                dec     hl
+                ld      (pTmp2), hl
+                ld      bc, (pSymbolTbl) ; Pointer to the symbol table
+                ld      hl, (pTmp1)
+                ex      de, hl
+                ld      hl, (pTmp2)
+                call    sub_972F
+                ld      (pTmp2), hl
+                ex      de, hl
+                ld      (pTmp1), hl
+                ld      (pSymbolTbl), hl ; Pointer to the symbol table
+                ld      hl, (pTmp6)
+                ld      (pTmp1), hl
+                ld      hl, (SymCount)  ; Number of symbols defined
+                dec     hl
+                ld      (SymCount), hl  ; Number of symbols defined
+                ret
+; End of function sub_6B28
+; =============== S U B R O U T I N E =======================================
+sub_6B6F:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (byte_A695)
+                ld      l, a
+                ld      h, 0
+                ld      (pTmp5), hl
+                ld      bc, 0FFFEh
+                add     hl, bc
+                ld      (pTmp3), hl
+                ld      hl, (pTmp5)
+                ld      a, (byte_A694)
+                ld      c, a
+                ld      b, 0
+                add     hl, bc
+                inc     hl
+                ld      (pTmp5), hl
+                ld      hl, (pTmp1)
+                ld      (pTmp2), hl
+                ld      hl, (pSymbolTbl) ; Pointer to the symbol table
+                ld      (pTmp1), hl
+                ld      (pIndex), hl
+                ld      de, (pTmp5)
+                or      a
+                sbc     hl, de
+                ld      (pTmp1), hl
+                ld      de, (pTmp1)
+                ld      hl, (word_9F9A)
+                or      a
+                sbc     hl, de
+                jp      c, loc_6BB9
+                jp      Error31         ; Symbol table overflow
+; ---------------------------------------------------------------------------
+loc_6BB9:                               ; Number of symbols defined
+                ld      hl, (SymCount)
+                inc     hl
+                ld      (SymCount), hl  ; Number of symbols defined
+                ld      hl, (pTmp1)
+                ld      (pSymbolTbl), hl ; Pointer to the symbol table
+                ld      bc, (pTmp1)
+                ld      hl, (pIndex)
+                ex      de, hl
+                ld      hl, (pTmp2)
+                call    sub_9721
+                ld      (pTmp1), hl
+                ex      de, hl
+                ld      (pIndex), hl
+                ld      de, (pTmp5)
+                ld      hl, (pTmp2)
+                or      a
+                sbc     hl, de
+                ld      (pTmp2), hl
+                ld      hl, (pTmp5)
+                ex      de, hl
+                ld      hl, (pTmp2)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pTmp2)
+                ld      de, 2
+                add     hl, de
+                ld      (pTmp2), hl
+                ld      bc, (pTmp3)
+                ex      de, hl
+                ld      hl, (word_02F2)
+                call    CopyBCup        ; Copy BC bytes from (HL)->(DE) up
+                ld      (word_02F2), hl
+                ex      de, hl
+                ld      (pTmp2), hl
+                ld      a, (byte_A694)
+                ld      (hl), a
+; End of function sub_6B6F
+; =============== S U B R O U T I N E =======================================
+sub_6C12:
+                ld      hl, (pTmp2)
+                inc     hl
+                ld      (pTmp2), hl
+                ld      de, (pTmp2)
+                ld      hl, (word_02F4)
+                ld      a, (byte_A694)
+                call    CopyAup         ; Copy A bytes from (HL)->(DE) up
+                call    sub_6A53
+                ld      hl, (pIndex)
+                ex      de, hl
+                ld      hl, (pSymbolTbl) ; Pointer to the symbol table
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ret
+; End of function sub_6C12
+; =============== S U B R O U T I N E =======================================
+sub_6C34:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      de, byte_052D
+                ld      hl, byte_0512
+                call    sub_980F
+                ld      de, 765
+                ld      hl, (pGLBBuffer3)
+                add     hl, de
+                ld      (pGLBBuffer3), hl
+                ld      de, byte_0530
+                call    sub_980F
+                ld      de, byte_0512
+                ld      hl, byte_A61A
+                call    sub_980F
+                ld      hl, byte_0512
+                ld      de, Nil
+                call    cp3BVal         ; Compare two 3 bytes values in (DE) and (HL)
+                jp      z, loc_6C7D
+                call    sub_7995
+                ld      de, 765
+                ld      hl, (pGLBBuffer3)
+                add     hl, de
+                ld      (pGLBBuffer3), hl
+                ld      de, byte_0530
+                call    sub_980E
+                ld      hl, (pGLbBuffer2)
+                ld      (hl), 1
+loc_6C7D:
+                ld      de, byte_0512
+                ld      hl, byte_052D
+                call    sub_980F
+                call    sub_9B7C
+                ret
+; End of function sub_6C34
+; =============== S U B R O U T I N E =======================================
+sub_6C8A:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, 1
+                ld      (I1), a
+                ld      hl, (pTmp1)
+                ld      (pTmp2), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, (pTmp1)
+                add     hl, de
+                ld      (pTmp1), hl
+                call    sub_8431
+                ret
+; End of function sub_6C8A
+; =============== S U B R O U T I N E =======================================
+sub_6CA6:
+                call    SSChk           ; Check for room on the syntax stack
+                call    sub_7995
+                ld      hl, (pGLBBuffer3)
+                ld      de, 14h
+                add     hl, de
+                ld      (pTmp7), hl
+                xor     a
+                ld      (N), a
+loc_6CBA:
+                ld      hl, N
+                inc     (hl)
+                ld      hl, (pTmp7)
+                ld      (pTmp5), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, (pTmp7)
+                add     hl, de
+                ld      (pTmp7), hl
+                ld      bc, 0FFFDh
+                add     hl, bc
+                ld      (pIndex), hl
+                ld      de, byte_0515
+                call    cp3BVal         ; Compare two 3 bytes values in (DE) and (HL)
+                jp      nz, loc_6CBA
+                ld      hl, N
+                dec     (hl)
+                ret
+; End of function sub_6CA6
+; =============== S U B R O U T I N E =======================================
+sub_6CE3:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      de, byte_0512
+                ld      hl, byte_052A
+                call    sub_980F
+                ld      hl, byte_0512
+                ld      de, Nil
+                call    cp3BVal         ; Compare two 3 bytes values in (DE) and (HL)
+                jp      z, loc_6D42
+loc_6CFB:
+                call    sub_6D48
+                ld      a, (byte_A696)
+                cp      1
+                jp      z, loc_6D35
+                ld      a, (Case)
+                cp      2
+                jp      z, loc_6D15
+                ld      a, (byte_A60B)
+                or      a
+                jp      nz, loc_6D22
+loc_6D15:
+                ld      hl, (pTmp1)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, (pTmp1)
+                add     hl, de
+                ld      (pTmp1), hl
+loc_6D22:
+                ld      hl, (pTmp1)
+                ld      bc, 0FFFDh
+                add     hl, bc
+                ld      (pTmp1), hl
+                ld      de, byte_0512
+                call    sub_980F
+                jp      loc_6CFB
+; ---------------------------------------------------------------------------
+loc_6D35:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ld      a, (Case)
+                cp      2
+                jp      z, locret_6D47
+loc_6D42:
+                ld      a, 0
+                ld      (Result), a     ; Holds the result of called function
+locret_6D47:
+                ret
+; End of function sub_6CE3
+; =============== S U B R O U T I N E =======================================
+sub_6D48:
+                call    SSChk           ; Check for room on the syntax stack
+                call    sub_79AA
+                ld      hl, (pTmp1)
+                ld      de, 0Ch
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (pIndex), hl
+                ld      hl, (pTmp1)
+                ld      de, 2
+                add     hl, de
+                ld      a, (hl)
+                ld      (byte_A60B), a
+                inc     hl
+                ld      a, (hl)
+                ld      (byte_A696), a
+                ld      de, 5
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      (pTmp8), hl
+                ld      de, (pIndex)
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      a, (SubFL)      ; Set if variable has subscripts
+                ld      (I5), a
+                ld      hl, (word_A640)
+                ex      de, hl
+                ld      hl, (pTmp1)
+                call    sub_96C0
+                ld      (I5), a
+                ld      (pTmp10), hl
+                ld      a, (Case)
+                cp      1
+                jp      nz, loc_6DCE
+                ld      hl, (pTmp8)
+                ld      (pTmp1), hl
+                xor     a
+                ld      (byte_A60B), a
+loc_6DA9:
+                ld      hl, (pTmp1)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, 0
+                or      a
+                sbc     hl, de
+                jp      z, locret_6DEA
+                ld      a, (SubFL)      ; Set if variable has subscripts
+                ld      (I5), a
+                ld      hl, (word_A640)
+                ex      de, hl
+                ld      hl, (pTmp1)
+                call    sub_96C0
+                ld      (I5), a
+                ld      (pTmp10), hl
+loc_6DCE:
+                ld      a, (Case)
+                cp      3
+                jp      nz, locret_6DEA
+                ld      hl, (pTmp1)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, (pTmp1)
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      hl, byte_A60B
+                inc     (hl)
+                jp      loc_6DA9
+; ---------------------------------------------------------------------------
+locret_6DEA:
+                ret
+; End of function sub_6D48
+; =============== S U B R O U T I N E =======================================
+sub_6DEB:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, byte_0518
+                call    SetD            ; Set disk block value
+                ld      hl, byte_0524
+                call    SetD            ; Set disk block value
+                ld      hl, byte_0512
+                call    SetD            ; Set disk block value
+                ld      hl, (word_A640)
+                call    PushP           ; Pushes pointer in HL onto the stack
+                ld      a, (byte_A695)
+                ld      (ix+0), a
+                inc     ix
+                ld      a, (byte_04C3)
+                ld      (ix+0), a
+                inc     ix
+                ld      a, (SubFL)      ; Set if variable has subscripts
+                ld      (ix+0), a
+                inc     ix
+loc_6E1E:
+                ld      de, byte_0518
+                ld      hl, byte_0512
+                call    sub_980F
+                call    sub_79AA
+                ld      hl, (pTmp1)
+                ld      de, 0Fh
+                add     hl, de
+                ld      a, (hl)
+                ld      (byte_A696), a
+                ld      de, 2
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      de, byte_0524
+                call    sub_980F
+                xor     a
+                ld      (I1), a
+                ld      hl, byte_0524
+                ld      de, Nil
+                call    cp3BVal         ; Compare two 3 bytes values in (DE) and (HL)
+                jp      z, loc_6F6A
+                ld      de, byte_0512
+                ld      hl, byte_0524
+                call    sub_980F
+                ld      hl, (pTmp1)
+                ld      de, 3
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      (word_A640), ix
+                call    sub_7E48
+                dec     ix
+                ld      a, (ix+0)
+                ld      (SubFL), a      ; Set if variable has subscripts
+                ld      a, (I1)
+                ld      (byte_A695), a
+                ld      de, byte_0515
+                ld      hl, byte_0518
+                call    sub_980F
+                call    sub_6CA6
+                ld      hl, (pTmp5)
+                ld      (pTmp1), hl
+                xor     a
+                ld      (I1), a
+                ld      a, (SubFL)      ; Set if variable has subscripts
+                ld      (I5), a
+                ld      hl, (word_A640)
+                ex      de, hl
+                ld      hl, (pTmp1)
+                call    sub_96C0
+                ld      (I5), a
+                ld      (pTmp10), hl
+                ld      a, (N)
+                ld      (byte_A60B), a
+                ld      a, (Case)
+                cp      2
+                jp      z, loc_6F3B
+                ld      (ix+0), a
+                inc     ix
+                call    sub_6C8A
+                ld      a, (byte_A695)
+                add     a, 3
+                ld      (byte_A695), a
+                ld      de, byte_0521
+                ld      hl, byte_0518
+                call    sub_980F
+                ld      hl, byte_052D
+                call    SetD            ; Set disk block value
+                ld      a, (byte_04DF)
+                ld      (ix+0), a
+                inc     ix
+                ld      a, (byte_A60B)
+                ld      (ix+0), a
+                inc     ix
+                ld      a, (byte_A699)
+                ld      (ix+0), a
+                inc     ix
+                ld      a, 1
+                ld      (byte_A69A), a
+                call    sub_7EF7
+                xor     a
+                ld      (byte_A69A), a
+                ld      a, (byte_A699)
+                ld      (I1), a
+                or      a
+                jp      z, loc_6F15
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (tmpChar2), a
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     ix, bc
+                call    SSChk           ; Check for room on the syntax stack
+loc_6F15:
+                dec     ix
+                ld      a, (ix+0)
+                ld      (byte_A699), a
+                dec     ix
+                ld      a, (ix+0)
+                ld      (byte_A60B), a
+                dec     ix
+                ld      a, (ix+0)
+                ld      (byte_04DF), a
+                ld      hl, byte_052D
+                call    sub_9766
+                dec     ix
+                ld      a, (ix+0)
+                ld      (Case), a
+loc_6F3B:
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (tmpChar2), a
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     ix, bc
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (byte_A60B)
+                or      a
+                jp      nz, loc_6F6A
+                ld      a, (Case)
+                cp      2
+                jp      z, loc_6F6A
+                ld      de, byte_0512
+                ld      hl, byte_0524
+                call    sub_980F
+                jp      loc_6E1E
+; ---------------------------------------------------------------------------
+loc_6F6A:
+                dec     ix
+                ld      a, (ix+0)
+                ld      (SubFL), a      ; Set if variable has subscripts
+                dec     ix
+                ld      a, (ix+0)
+                ld      (byte_04C3), a
+                dec     ix
+                ld      a, (ix+0)
+                ld      (byte_A695), a
+                call    IXtoHL          ; Loads the value in (IX) into HL
+                ld      (word_A640), hl
+                ld      hl, byte_0512
+                call    sub_9766
+                ld      hl, byte_0524
+                call    sub_9766
+                ld      hl, byte_0518
+                call    sub_9766
+                ld      a, (I1)
+                or      a
+                jp      z, locret_702C
+                ld      de, byte_0512
+                ld      hl, byte_0524
+                call    sub_980F
+                call    sub_6D48
+                ld      hl, (pGLBBuffer3)
+                ld      de, 0Bh
+                add     hl, de
+                ld      (pIndex), hl
+                ld      a, (byte_A60B)
+                cp      (hl)
+                jp      nz, locret_702C
+                ld      (N), a
+                ld      hl, (pGLBBuffer3)
+                ld      de, 765
+                add     hl, de
+                ld      (pIndex), hl
+                ld      de, byte_0512
+                call    sub_980F
+                ld      hl, byte_0512
+                ld      de, Nil
+                call    cp3BVal         ; Compare two 3 bytes values in (DE) and (HL)
+                jp      z, locret_702C
+                call    sub_6D48
+                ld      a, (byte_A60B)
+                or      a
+                jp      nz, loc_6FF9
+                ld      de, byte_0512
+                ld      hl, byte_0524
+                call    sub_980F
+                ld      a, (N)
+                ld      (byte_A60B), a
+                jp      locret_702C
+; ---------------------------------------------------------------------------
+loc_6FF9:
+                ld      de, byte_0524
+                ld      hl, byte_0512
+                call    sub_980F
+                ld      de, byte_0512
+                ld      hl, byte_052D
+                call    sub_980F
+                call    sub_79AA
+                ld      hl, (pTmp1)
+                ld      de, 11h
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      de, byte_0524
+                call    sub_980E
+                ld      hl, (pGLbBuffer2)
+                ld      (hl), 1
+                ld      de, byte_0512
+                ld      hl, byte_0524
+                call    sub_980F
+locret_702C:
+                ret
+; End of function sub_6DEB
+; =============== S U B R O U T I N E =======================================
+sub_702D:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, byte_0512
+                ld      de, Nil
+                call    cp3BVal         ; Compare two 3 bytes values in (DE) and (HL)
+                jp      z, locret_70A7
+                ld      a, (byte_A696)
+                cp      1
+                jp      z, locret_70A7
+                ld      de, byte_0533
+                ld      hl, byte_0512
+                call    sub_980F
+                call    sub_79AA
+                ld      hl, (pTmp1)
+                ld      de, 14h
+                add     hl, de
+                ld      (pTmp1), hl
+loc_705A:
+                ld      hl, (pTmp1)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, (pTmp1)
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      bc, 0FFFDh
+                add     hl, bc
+                ld      (pIndex), hl
+                ld      de, byte_0512
+                call    sub_980F
+                call    sub_7995
+                ld      hl, (pGLBBuffer3)
+                ld      de, 11h
+                add     hl, de
+                ld      (pTmp2), hl
+                ld      de, byte_0533
+                call    sub_980E
+                ld      hl, (pGLbBuffer2)
+                ld      (hl), 1
+                ld      de, byte_0512
+                ld      hl, byte_0533
+                call    sub_980F
+                call    sub_7995
+                ld      hl, (pTmp1)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, 0
+                or      a
+                sbc     hl, de
+                jp      nz, loc_705A
+locret_70A7:
+                ret
+; End of function sub_702D
+; =============== S U B R O U T I N E =======================================
+sub_70A8:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (NameLen)    ; Length of the current variable name
+                or      a
+                jp      nz, loc_70FA
+                ld      a, (byte_04D0)
+                or      a
+                jp      z, Error36      ; Naked global reference illegal
+                ld      a, (SubFL)      ; Set if variable has subscripts
+                or      a
+                jp      z, Error36      ; Naked global reference illegal
+                ld      a, 1
+                ld      (NR), a
+                ld      hl, byte_04D0
+                dec     (hl)
+                ld      hl, (word_02CC)
+                ld      (word_02D0), hl
+                ld      a, (byte_A698)
+                ld      (byte_A697), a
+                call    sub_7D33
+                ld      a, (byte_04D0)
+                ld      (SubFL), a      ; Set if variable has subscripts
+                ld      (UnkFL02), a    ; Set but never read
+                ld      a, (byte_A697)
+                ld      (byte_A695), a
+                ld      hl, byte_9FD3
+                ld      (word_02F2), hl
+                ld      a, (hl)
+                ld      (NameLen), a    ; Length of the current variable name
+                ld      c, a
+                ld      b, 0
+                add     hl, bc
+                inc     hl
+                ld      (word_A640), hl
+                ret
+; ---------------------------------------------------------------------------
+loc_70FA:                               ; Set if variable has subscripts
+                ld      a, (SubFL)
+                or      a
+                jp      z, locret_7107
+                call    sub_80D3
+                call    sub_7D33
+locret_7107:
+                ret
+; End of function sub_70A8
+; =============== S U B R O U T I N E =======================================
+sub_7108:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      de, byte_A617
+                ld      hl, byte_0512
+                call    sub_980F
+loc_7114:
+                ld      hl, 776
+                ld      (word_A622), hl
+                ld      a, 47h          ; 'G'
+                ld      (byte_A693), a
+                call    sub_5BFC
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, loc_7130
+                call    sub_5A7B
+                jp      loc_7114
+; ---------------------------------------------------------------------------
+loc_7130:
+                ld      de, byte_0512
+                ld      hl, byte_A617
+                call    sub_980F
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                ld      (pGLBBuffer3), hl
+                ld      de, byte_0512
+                call    sub_980E
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                ld      de, 3
+                add     hl, de
+                ld      (pGlbBufferW), hl ; Pointer to global buffer to write
+                ld      (hl), 0
+                ld      hl, (word_A634)
+                ex      de, hl
+                ld      hl, (pGLBBuffer3)
+                ld      bc, 4
+                call    sub_968F
+                call    sub_7EDF
+                ret
+; End of function sub_7108
+; =============== S U B R O U T I N E =======================================
+sub_7162:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, 0
+                ld      (Result), a     ; Holds the result of called function
+                ld      hl, (word_A634)
+                ld      (pGLBBuffer3), hl
+loc_7170:
+                ld      hl, (pGLBBuffer3)
+                ld      de, 4
+                add     hl, de
+                ld      (pGLBBuffer3), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (pGLBBuffer3), hl
+                ex      de, hl
+                ld      hl, (word_A634)
+                or      a
+                sbc     hl, de
+                jp      z, locret_71AB
+                ld      hl, (pGLBBuffer3)
+                ld      de, byte_0512
+                call    cp3BVal         ; Compare two 3 bytes values in (DE) and (HL)
+                jp      z, loc_719A
+                jp      loc_7170
+; ---------------------------------------------------------------------------
+loc_719A:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ld      hl, (pGLBBuffer3)
+                ld      (pGlbBufferW), hl ; Pointer to global buffer to write
+                call    sub_6530
+                call    sub_7EDF
+locret_71AB:
+                ret
+; End of function sub_7162
+; =============== S U B R O U T I N E =======================================
+sub_71AC:
+                call    SSChk           ; (todo) Check this
+                ld      de, byte_0512
+                ld      hl, byte_052A
+                call    sub_980F
+loc_71B8:
+                call    sub_79AA
+                ld      hl, (pTmp1)
+                ld      de, 0Fh
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      a, (hl)
+                cp      1
+                jp      z, locret_71E9
+                ld      de, 5
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, (pTmp1)
+                add     hl, de
+                ld      bc, 0FFFDh
+                add     hl, bc
+                ld      (pTmp1), hl
+                ld      de, byte_0512
+                call    sub_980F
+                jp      loc_71B8
+; ---------------------------------------------------------------------------
+locret_71E9:
+                ret
+; End of function sub_71AC
+; =============== S U B R O U T I N E =======================================
+sub_71EA:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, loc_7202
+                ld      hl, (pTmp1)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, (pTmp1)
+                add     hl, de
+                ld      (pTmp1), hl
+loc_7202:
+                ld      hl, (pTmp1)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, 0
+                or      a
+                sbc     hl, de
+                jp      nz, loc_723A
+                ld      hl, (pGLBBuffer3)
+                ld      de, 765
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      de, byte_0512
+                call    sub_980F
+                ld      hl, byte_0512
+                ld      de, Nil
+                call    cp3BVal         ; Compare two 3 bytes values in (DE) and (HL)
+                jp      z, loc_7242
+                call    sub_79AA
+                ld      hl, (pTmp1)
+                ld      de, 14h
+                add     hl, de
+                ld      (pTmp1), hl
+loc_723A:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                jp      locret_7247
+; ---------------------------------------------------------------------------
+loc_7242:
+                ld      a, 0
+                ld      (Result), a     ; Holds the result of called function
+locret_7247:
+                ret
+; End of function sub_71EA
+; =============== S U B R O U T I N E =======================================
+sub_7248:
+                call    SSChk           ; Check for room on the syntax stack
+                xor     a
+                ld      (Count), a
+loc_724F:
+                ld      de, byte_0515
+                ld      hl, byte_0512
+                call    sub_980F
+                call    sub_7995
+                ld      hl, (pGLBBuffer3)
+                ld      de, 11h
+                add     hl, de
+                ld      (pIndex), hl
+                ld      de, byte_0512
+                call    sub_980F
+                ld      hl, byte_0512
+                ld      de, Nil
+                call    cp3BVal         ; Compare two 3 bytes values in (DE) and (HL)
+                jp      z, locret_7304
+                call    sub_7995
+                call    sub_6CA6
+loc_727D:
+                ld      a, (N)
+                or      a
+                jp      nz, loc_728B
+                ld      hl, Count
+                inc     (hl)
+                jp      loc_724F
+; ---------------------------------------------------------------------------
+loc_728B:
+                ld      hl, (pTmp5)
+                ld      bc, 0FFFDh
+                add     hl, bc
+                ld      (pTmp5), hl
+                ld      de, byte_0512
+                call    sub_980F
+                call    sub_7995
+                ld      hl, (pGLBBuffer3)
+                ld      (pTmp5), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (pIndex), hl
+                ld      de, 745
+                or      a
+                sbc     hl, de
+                jp      nz, loc_72D7
+                ld      hl, N
+                dec     (hl)
+                ld      hl, (pTmp5)
+                ld      de, 11h
+                add     hl, de
+                ld      (pTmp5), hl
+                ld      de, byte_0512
+                call    sub_980F
+                call    sub_7995
+                call    sub_809F
+                ld      hl, (pTmp1)
+                ld      (pTmp5), hl
+                jp      loc_727D
+; ---------------------------------------------------------------------------
+loc_72D7:
+                ld      a, (Count)
+                or      a
+                jp      z, locret_7304
+                ld      hl, (pGLBBuffer3)
+                ld      de, 0Bh
+                add     hl, de
+                ld      (pGLBBuffer3), hl
+                ld      a, (hl)
+                ld      (N), a
+                ld      de, 765
+                ld      hl, (pTmp5)
+                add     hl, de
+                ld      de, (pIndex)
+                or      a
+                sbc     hl, de
+                ld      (pTmp5), hl
+                ld      hl, Count
+                dec     (hl)
+                jp      loc_728B
+; ---------------------------------------------------------------------------
+locret_7304:
+                ret
+; End of function sub_7248
+; =============== S U B R O U T I N E =======================================
+sub_7305:
+                call    SSChk           ; Check for room on the syntax stack
+                call    sub_7995
+                ld      a, (byte_A60B)
+                ld      (N), a
+                call    sub_809F
+                ld      a, (byte_A695)
+                ld      l, a
+                ld      h, 0
+                ld      (word_A64E), hl
+                ld      a, (byte_A696)
+                cp      0
+                jp      z, loc_7336
+                ld      hl, (word_A64E)
+                ld      a, (byte_A694)
+                ld      c, a
+                ld      b, 0
+                add     hl, bc
+                inc     hl
+                ld      (word_A64E), hl
+                jp      loc_7340
+; ---------------------------------------------------------------------------
+loc_7336:
+                ld      hl, (word_A64E)
+                ld      de, 3
+                add     hl, de
+                ld      (word_A64E), hl
+loc_7340:
+                ld      hl, (pGLBBuffer3)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      bc, 0FFFEh
+                add     hl, bc
+                ld      (pTmp2), hl
+                ld      de, (word_A64E)
+                or      a
+                sbc     hl, de
+                jp      c, loc_7363
+                call    sub_7F4F
+                ld      a, 0
+                ld      (byte_04DF), a
+                jp      locret_7366
+; ---------------------------------------------------------------------------
+loc_7363:
+                call    sub_810A
+locret_7366:
+                ret
+; End of function sub_7305
+; =============== S U B R O U T I N E =======================================
+; Close GLobals
+GLBClose:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (bIsGlbOpen)
+                cp      0
+                jp      z, locret_73C3
+                ld      de, byte_0512
+                ld      hl, GZero
+                call    sub_980F
+                call    sub_79AA
+                ld      hl, (pTmp1)
+                ld      de, 5
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      hl, (word_A648)
+                ex      de, hl
+                ld      hl, (pTmp1)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pGLbBuffer2)
+                ld      (hl), 1
+loc_7397:
+                ld      hl, (word_A634)
+                ld      de, 4
+                add     hl, de
+                ld      (pGlbBufferW), hl ; Pointer to global buffer to write
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (pGlbBufferW), hl ; Pointer to global buffer to write
+                ex      de, hl
+                ld      hl, (word_A634)
+                or      a
+                sbc     hl, de
+                jp      z, loc_73BB
+                call    sub_5A67
+                call    sub_629D
+                jp      loc_7397
+; ---------------------------------------------------------------------------
+loc_73BB:                               ; Close globals file
+                call    GFClose
+                ld      a, 0
+                ld      (bIsGlbOpen), a
+locret_73C3:
+                ret
+; End of function GLBClose
+; =============== S U B R O U T I N E =======================================
+sub_73C4:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      de, byte_051B
+                ld      hl, byte_0512
+                call    sub_980F
+                ld      de, byte_0518
+                ld      hl, byte_0512
+                call    sub_980F
+                ld      a, (byte_A60B)
+                ld      (N), a
+                or      a
+                jp      nz, loc_7409
+                call    sub_7248
+                ld      de, byte_0518
+                ld      hl, byte_0512
+                call    sub_980F
+                xor     a
+                ld      (N), a
+                ld      de, byte_0512
+                ld      hl, byte_051B
+                call    sub_980F
+                call    sub_79AA
+                ld      hl, (pTmp1)
+                ld      de, 14h
+                add     hl, de
+                ld      (pTmp1), hl
+loc_7409:
+                xor     a
+                ld      (I2), a
+                ld      (I4), a
+loc_7410:
+                xor     a
+                ld      (I1), a
+                ld      hl, (pTmp1)
+                ld      (pTmp2), hl
+loc_741A:
+                ld      hl, (pTmp1)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, 0
+                or      a
+                sbc     hl, de
+                jp      z, loc_745F
+                ld      a, (SubFL)      ; Set if variable has subscripts
+                ld      (I5), a
+                ld      hl, (word_A640)
+                ex      de, hl
+                ld      hl, (pTmp1)
+                call    sub_96C0
+                ld      (I5), a
+                ld      (pTmp10), hl
+                ld      a, (I5)
+                or      a
+                jp      nz, loc_74AD
+                ld      a, 1
+                ld      (I4), a
+                ld      hl, I1
+                inc     (hl)
+                ld      hl, (pTmp1)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, (pTmp1)
+                add     hl, de
+                ld      (pTmp1), hl
+                jp      loc_741A
+; ---------------------------------------------------------------------------
+loc_745F:
+                ld      a, (N)
+                or      a
+                jp      nz, loc_747A
+                ld      a, (I2)
+                or      a
+                jp      nz, loc_747A
+                ld      hl, I2
+                inc     (hl)
+                ld      de, byte_0533
+                ld      hl, byte_0512
+                call    sub_980F
+loc_747A:
+                call    sub_8431
+                ld      hl, (pGLBBuffer3)
+                ld      de, 765
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      de, byte_0512
+                call    sub_980F
+                ld      hl, byte_0512
+                ld      de, Nil
+                call    cp3BVal         ; Compare two 3 bytes values in (DE) and (HL)
+                jp      z, loc_74B0
+                call    sub_79AA
+                ld      hl, (pTmp1)
+                ld      de, 14h
+                add     hl, de
+                ld      (pTmp1), hl
+                xor     a
+                ld      (N), a
+                jp      loc_7410
+; ---------------------------------------------------------------------------
+loc_74AD:
+                call    sub_8431
+loc_74B0:
+                ld      a, (I4)
+                or      a
+                jp      z, locret_76CD
+loc_74B7:
+                ld      a, (I2)
+                or      a
+                jp      z, loc_75C7
+                xor     a
+                ld      (I2), a
+                ld      de, byte_0512
+                ld      hl, byte_0533
+                call    sub_980F
+                call    sub_7248
+                ld      de, byte_A61A
+                ld      hl, byte_0512
+                call    sub_980F
+                ld      de, byte_0512
+                ld      hl, byte_0533
+                call    sub_980F
+                ld      de, byte_0515
+                ld      hl, byte_0533
+                call    sub_980F
+                call    sub_79AA
+                ld      hl, (pTmp1)
+                ld      de, 11h
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      de, byte_0512
+                call    sub_980F
+                ld      hl, byte_0512
+                ld      de, Nil
+                call    cp3BVal         ; Compare two 3 bytes values in (DE) and (HL)
+                jp      z, loc_75C7
+                call    sub_6CA6
+                ld      a, (N)
+                ld      (I3), a
+                ld      hl, (pTmp5)
+                ld      (pTmp1), hl
+loc_7517:
+                ld      de, byte_051B
+                ld      hl, byte_0512
+                call    sub_980F
+loc_7520:
+                ld      hl, (pTmp1)
+                ld      (pIndex), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, (pIndex)
+                add     hl, de
+                ld      bc, 0FFFDh
+                add     hl, bc
+                ld      (pIndex), hl
+                ld      de, byte_0512
+                call    sub_980F
+                call    sub_7995
+                ld      hl, (pGLBBuffer3)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, 745
+                or      a
+                sbc     hl, de
+                jp      z, loc_7552
+                call    sub_6DEB
+                jp      loc_74B7
+; ---------------------------------------------------------------------------
+loc_7552:
+                call    sub_6C34
+                ld      de, byte_0512
+                ld      hl, byte_051B
+                call    sub_980F
+                call    sub_7995
+                ld      a, (I3)
+                ld      (N), a
+                call    sub_809F
+                call    sub_6C8A
+                ld      hl, (pTmp1)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, 0
+                or      a
+                sbc     hl, de
+                jp      nz, loc_7520
+                ld      a, (I3)
+                or      a
+                jp      nz, loc_7597
+                ld      a, (I2)
+                or      a
+                jp      nz, loc_7597
+                ld      hl, I2
+                inc     (hl)
+                ld      de, byte_0533
+                ld      hl, byte_0512
+                call    sub_980F
+loc_7597:
+                ld      hl, (pGLBBuffer3)
+                ld      de, 765
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      de, byte_0512
+                call    sub_980F
+                ld      hl, byte_0512
+                ld      de, Nil
+                call    cp3BVal         ; Compare two 3 bytes values in (DE) and (HL)
+                jp      z, loc_74B7
+                call    sub_79AA
+                ld      hl, (pTmp1)
+                ld      de, 14h
+                add     hl, de
+                ld      (pTmp1), hl
+                xor     a
+                ld      (I3), a
+                jp      loc_7517
+; ---------------------------------------------------------------------------
+loc_75C7:
+                ld      de, byte_0512
+                ld      hl, byte_0518
+                call    sub_980F
+                ld      a, 1
+                ld      (byte_A696), a
+loc_75D5:
+                ld      hl, byte_0512
+                ld      de, Nil
+                call    cp3BVal         ; Compare two 3 bytes values in (DE) and (HL)
+                jp      z, loc_764F
+                call    sub_79AA
+                ld      hl, (pTmp1)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (word_02B8), hl
+                ld      de, 765
+                ld      hl, (pTmp1)
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      de, byte_0512
+                call    sub_980F
+                ld      hl, byte_0512
+                ld      de, Nil
+                call    cp3BVal         ; Compare two 3 bytes values in (DE) and (HL)
+                jp      nz, loc_7622
+                ld      de, byte_0512
+                ld      hl, byte_0518
+                call    sub_980F
+                call    sub_7248
+                ld      de, byte_0518
+                ld      hl, byte_0512
+                call    sub_980F
+                jp      loc_75D5
+; ---------------------------------------------------------------------------
+loc_7622:
+                call    sub_79AA
+                ld      hl, (pTmp1)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      de, (word_02B8)
+                add     hl, de
+                ld      (pTmp2), hl
+                ld      de, 64789
+                add     hl, de
+                jp      nc, loc_764F
+                call    sub_7BA6
+                ld      de, byte_0518
+                ld      hl, byte_0512
+                call    sub_980F
+                ld      a, 0
+                ld      (byte_A696), a
+                jp      loc_75D5
+; ---------------------------------------------------------------------------
+loc_764F:
+                ld      de, byte_0512
+                ld      hl, byte_052A
+                call    sub_980F
+                call    sub_79AA
+                ld      hl, (pTmp1)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, 745
+                or      a
+                sbc     hl, de
+                jp      nz, loc_7673
+                call    sub_9B7C
+                call    sub_776C
+                jp      locret_76CD
+; ---------------------------------------------------------------------------
+loc_7673:
+                ld      hl, (pTmp1)
+                ld      de, 0Bh
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      a, (hl)
+                cp      1
+                jp      nz, locret_76CD
+                ld      de, 4
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      a, (hl)
+                cp      1
+                jp      z, locret_76CD
+                ld      de, 5
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, (pTmp1)
+                add     hl, de
+                ld      bc, 65533
+                add     hl, bc
+                ld      (pTmp1), hl
+                ld      de, byte_052A
+                call    sub_980F
+                call    sub_9B7C
+                call    sub_84BC
+                ld      de, byte_0512
+                ld      hl, byte_052A
+                call    sub_980F
+                call    sub_79AA
+                ld      hl, (pTmp1)
+                ld      de, 11h
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      de, Nil
+                call    sub_980E
+locret_76CD:
+                ret
+; End of function sub_73C4
+; =============== S U B R O U T I N E =======================================
+; Find place for a key
+FindKey:
+                call    SSChk           ; (todo)
+                call    sub_7974
+                ld      de, byte_0512
+                ld      hl, glbptrUnk
+                call    sub_980F
+loc_76DD:
+                ld      hl, byte_0512
+                ld      de, Nil
+                call    cp3BVal         ; Compare two 3 bytes values in (DE) and (HL)
+                jp      z, loc_7766
+                xor     a               ; PASSU
+                ld      (byte_054A), a
+                call    sub_79AA
+                ld      hl, (pTmp1)
+                inc     hl
+                ld      (pTmp1), hl
+loc_76F7:
+                ld      hl, (pTmp1)
+                ld      a, (hl)
+                or      a
+                jp      z, loc_7732
+                ld      hl, (word_02F2)
+                ld      (pTmp8), hl
+                ld      hl, (pTmp1)
+                ld      (pTmp2), hl
+                ex      de, hl
+                ld      hl, (pTmp8)
+                call    sub_9558
+                ld      (pTmp8), hl
+                ex      de, hl
+                ld      (pTmp2), hl
+                ld      (Case), a
+                cp      2
+                jp      z, loc_7745
+                ld      hl, (pTmp1)
+                ld      de, 0Ch
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      hl, byte_054A
+                inc     (hl)
+                jp      loc_76F7
+; ---------------------------------------------------------------------------
+loc_7732:
+                ld      hl, (pGLBBuffer3)
+                ld      de, 765
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      de, byte_0512
+                call    sub_980F
+                jp      loc_76DD
+; ---------------------------------------------------------------------------
+loc_7745:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ld      hl, (pTmp1)
+                ld      de, 9
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      de, byte_052A
+                call    sub_980F
+                ld      de, byte_053F
+                ld      hl, byte_0512
+                call    sub_980F
+                jp      locret_776B
+; ---------------------------------------------------------------------------
+loc_7766:
+                ld      a, 0
+                ld      (Result), a     ; Holds the result of called function
+locret_776B:
+                ret
+; End of function FindKey
+; =============== S U B R O U T I N E =======================================
+sub_776C:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (byte_054A)
+                ld      (N), a
+                ld      de, byte_0512
+                ld      hl, byte_053F
+                call    sub_980F
+                call    sub_79AA
+                ld      hl, (pTmp1)
+                inc     hl
+                ld      (pTmp1), hl
+loc_7788:
+                ld      a, (N)
+                or      a
+                jp      z, loc_77A0
+                ld      hl, (pTmp1)
+                ld      de, 0Ch
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      hl, N
+                dec     (hl)
+                jp      loc_7788
+; ---------------------------------------------------------------------------
+loc_77A0:
+                ld      hl, (pTmp1)
+                ld      de, 0Ch
+                add     hl, de
+                ld      (pTmp2), hl
+                ld      (pTmp3), hl
+loc_77AD:
+                ld      hl, (pTmp3)
+                ld      a, (hl)
+                or      a
+                jp      z, loc_77BF
+                ld      de, 0Ch
+                add     hl, de
+                ld      (pTmp3), hl
+                jp      loc_77AD
+; ---------------------------------------------------------------------------
+loc_77BF:
+                ld      hl, (pTmp3)
+                inc     hl
+                ld      (pTmp3), hl
+                ld      bc, (pTmp1)
+                ld      hl, (pTmp2)
+                ex      de, hl
+                ld      hl, (pTmp3)
+                call    sub_9721
+                ld      (pTmp1), hl
+                ex      de, hl
+                ld      (pTmp2), hl
+                ld      hl, (pGLbBuffer2)
+                ld      (hl), 1
+                ld      hl, (pGLBBuffer3)
+                ld      (pTmp1), hl
+                dec     (hl)
+                ld      a, (hl)
+                or      a
+                jp      nz, locret_784D
+                ld      de, 765
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      de, byte_0515
+                call    sub_980F
+                ld      de, byte_0512
+                ld      hl, GZero
+                call    sub_980F
+                call    sub_79AA
+                ld      de, byte_0512
+                ld      hl, (pGLBBuffer3)
+                call    sub_980F
+loc_780E:
+                ld      hl, byte_0512
+                ld      de, byte_053F
+                call    cp3BVal         ; Compare two 3 bytes values in (DE) and (HL)
+                jp      z, loc_7830
+                call    sub_79AA
+                ld      de, 765
+                ld      hl, (pTmp1)
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      de, byte_0512
+                call    sub_980F
+                jp      loc_780E
+; ---------------------------------------------------------------------------
+loc_7830:
+                ld      hl, (pTmp1)
+                ld      de, byte_0515
+                call    sub_980E
+                ld      hl, (pGLbBuffer2)
+                ld      (hl), 1
+                ld      de, byte_0512
+                ld      hl, byte_053F
+                call    sub_980F
+                call    sub_9B7C
+                call    GLBClose        ; Close GLobals
+locret_784D:
+                ret
+; End of function sub_776C
+; =============== S U B R O U T I N E =======================================
+sub_784E:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      de, byte_0512
+                ld      hl, glbptrUnk
+                call    sub_980F
+                ld      hl, glbptrUnk
+                ld      de, Nil
+                call    cp3BVal         ; Compare two 3 bytes values in (DE) and (HL)
+                jp      nz, loc_78E8
+                ld      de, byte_0512
+                ld      hl, GZero
+                call    sub_980F
+                call    sub_79AA
+                call    sub_9AF9
+                ld      de, glbptrUnk
+                ld      hl, byte_0512
+                call    sub_980F
+                jp      loc_78B8
+; ---------------------------------------------------------------------------
+loc_7881:
+                ld      hl, byte_0512
+                ld      de, Nil
+                call    cp3BVal         ; Compare two 3 bytes values in (DE) and (HL)
+                jp      nz, loc_78E8
+                call    sub_9AF9
+                ld      de, byte_0515
+                ld      hl, byte_0512
+                call    sub_980F
+                ld      de, byte_0512
+                ld      hl, byte_0518
+                call    sub_980F
+                call    sub_79AA
+                ld      de, 765
+                ld      hl, (pTmp1)
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      de, byte_0512
+                ld      hl, byte_0515
+                call    sub_980F
+loc_78B8:
+                ld      hl, (pTmp1)
+                ld      de, byte_0512
+                call    sub_980E
+                ld      hl, (pGLbBuffer2)
+                ld      (hl), 1
+                call    sub_7108
+                xor     a
+                ld      (N), a
+                ld      hl, (pGLBBuffer3)
+                ld      (hl), 0
+                ld      de, 765
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      de, Nil
+                call    sub_980E
+                ld      hl, (pGLBBuffer3)
+                ld      (pTmp1), hl
+                jp      loc_7910
+; ---------------------------------------------------------------------------
+loc_78E8:
+                ld      de, byte_0518
+                ld      hl, byte_0512
+                call    sub_980F
+                call    sub_79AA
+                ld      hl, (pTmp1)
+                ld      a, (hl)
+                ld      (N), a
+                cp      Question
+                jp      nz, loc_7910
+                ld      de, 765
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      de, byte_0512
+                call    sub_980F
+                jp      loc_7881
+; ---------------------------------------------------------------------------
+loc_7910:
+                ld      hl, (pTmp1)
+                inc     (hl)
+                inc     hl
+                ld      (pTmp1), hl
+                ld      a, (N)
+                ld      (byte_054A), a
+loc_791E:
+                ld      a, (N)
+                or      a
+                jp      z, loc_7936
+                ld      hl, (pTmp1)
+                ld      de, 0Ch
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      hl, N
+                dec     (hl)
+                jp      loc_791E
+; ---------------------------------------------------------------------------
+loc_7936:
+                ld      hl, (pTmp1)
+                ex      de, hl
+                ld      hl, (word_02F2)
+                call    CopyHLDE        ; Copy (HL) bytes from (HL) to (DE)
+                ld      hl, (pTmp1)
+                ld      de, 9
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      de, Nil
+                call    sub_980E
+                ld      de, byte_052A
+                ld      hl, Nil
+                call    sub_980F
+                ld      hl, (pTmp1)
+                ld      de, 3
+                add     hl, de
+                ld      (pTmp2), hl
+                ld      (hl), 0
+                ld      hl, (pGLbBuffer2)
+                ld      (hl), 1
+                ld      de, byte_053F
+                ld      hl, byte_0512
+                call    sub_980F
+                ret
+; End of function sub_784E
+; =============== S U B R O U T I N E =======================================
+sub_7974:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (bIsGlbOpen)
+                cp      1
+                jp      z, locret_7994
+                ld      a, (GlobalsDR)  ; Default drive for globals (0-F)
+                ld      (Drive), a      ; Current disk drive
+                xor     a
+                ld      (FCBType), a    ; 0:Global, 1:Routine, 2:File
+                call    GFOpen          ; Open globals file
+                ld      a, 1
+                ld      (bIsGlbOpen), a
+                call    sub_7E16
+locret_7994:
+                ret
+; End of function sub_7974
+; =============== S U B R O U T I N E =======================================
+sub_7995:
+                call    SSChk           ; Check for room on the syntax stack
+                call    sub_7162
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, locret_79A9
+                call    sub_7108
+                call    PrepGFCBRead    ; Prepares global FCB for reading
+locret_79A9:
+                ret
+; End of function sub_7995
+; =============== S U B R O U T I N E =======================================
+sub_79AA:
+                call    SSChk           ; Check for room on the syntax stack
+                call    sub_7162
+                ld      a, (Result)     ; Holds the result of called function
+                cp      1
+                jp      z, loc_79BE
+                call    sub_7108
+                call    PrepGFCBRead    ; Prepares global FCB for reading
+loc_79BE:
+                ld      hl, (pGLBBuffer3)
+                ld      (pTmp1), hl
+                ret
+; End of function sub_79AA
+; =============== S U B R O U T I N E =======================================
+sub_79C5:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, 0
+                ld      (byte_A696), a
+                ld      hl, byte_052A
+                ld      de, Nil
+                call    cp3BVal         ; Compare two 3 bytes values in (DE) and (HL)
+                jp      nz, loc_79DE
+                ld      a, 1
+                ld      (byte_A696), a
+loc_79DE:
+                call    sub_9AF9
+                call    sub_7108
+                ld      hl, (pGLBBuffer3)
+                ld      de, 765
+                add     hl, de
+                ld      (pTmp2), hl
+                ld      de, Nil
+                call    sub_980E
+                ld      hl, (pGLBBuffer3)
+                ld      (pTmp1), hl
+                ld      de, byte_052A
+                ld      hl, byte_0512
+                call    sub_980F
+                ld      hl, (pTmp1)
+                ld      de, 745
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pTmp1)
+                ld      de, 2
+                add     hl, de
+                ld      (pTmp1), hl
+                ex      de, hl
+                ld      hl, (word_02F2)
+                call    CopyHLDE        ; Copy (HL) bytes from (HL) to (DE)
+                ld      hl, (pTmp1)
+                ld      de, 9
+                add     hl, de
+                ld      (hl), 0
+                inc     hl
+                ld      (pTmp1), hl
+                ld      de, 0
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pTmp1)
+                ld      de, 2
+                add     hl, de
+                ld      (hl), 0
+                inc     hl
+                ld      a, (byte_A696)
+                ld      (hl), a
+                inc     hl
+                ld      (hl), 1
+                inc     hl
+                ld      (pTmp1), hl
+                ld      de, Nil
+                call    sub_980E
+                ld      hl, (pTmp1)
+                ld      de, 3
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      de, 0
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pGLbBuffer2)
+                ld      (hl), 1
+                ret
+; End of function sub_79C5
+; =============== S U B R O U T I N E =======================================
+sub_7A61:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      de, byte_0512
+                ld      hl, byte_052A
+                call    sub_980F
+                ld      a, 1
+                ld      (N), a
+loc_7A72:
+                call    sub_7995
+                call    sub_809F
+                ld      hl, (pTmp1)
+                ld      (pIndex), hl
+                xor     a
+                ld      (tmpChar2), a
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, 0
+                or      a
+                sbc     hl, de
+                jp      nz, loc_7A93
+                ld      a, 1
+                ld      (tmpChar2), a
+loc_7A93:
+                ld      hl, (pIndex)
+                ld      bc, 0FFFDh
+                add     hl, bc
+                ld      (pIndex), hl
+                ld      a, (byte_A696)
+                cp      1
+                jp      z, loc_7ACC
+                ld      a, (tmpChar2)
+                ld      (ix+0), a
+                inc     ix
+                ld      a, (N)
+                ld      (ix+0), a
+                inc     ix
+                ld      hl, byte_0512
+                call    SetD            ; Set disk block value
+                ld      de, byte_0512
+                ld      hl, (pIndex)
+                call    sub_980F
+                ld      a, 1
+                ld      (N), a
+                jp      loc_7A72
+; ---------------------------------------------------------------------------
+loc_7ACC:
+                call    sub_9B7C
+                ld      hl, byte_0512
+                ld      de, byte_052A
+                call    cp3BVal         ; Compare two 3 bytes values in (DE) and (HL)
+                jp      z, locret_7AFD
+                ld      hl, byte_0512
+                call    sub_9766
+                dec     ix
+                ld      a, (ix+0)
+                ld      (N), a
+                dec     ix
+                ld      a, (ix+0)
+                ld      (tmpChar2), a
+                cp      1
+                jp      z, loc_7ACC
+                ld      hl, N
+                inc     (hl)
+                jp      loc_7A72
+; ---------------------------------------------------------------------------
+locret_7AFD:
+                ret
+; End of function sub_7A61
+; =============== S U B R O U T I N E =======================================
+; View a list of globals
+ShowGlb:
+                call    SSChk           ; Check for room on the syntax stack
+                call    sub_7974
+                xor     a
+                ld      (byte_04EA), a
+                ld      de, byte_0512
+                ld      hl, glbptrUnk
+                call    sub_980F
+loc_7B11:
+                ld      hl, byte_0512
+                ld      de, Nil
+                call    cp3BVal         ; Compare two 3 bytes values in (DE) and (HL)
+                jp      z, loc_7B9B
+                call    sub_79AA
+                ld      hl, (pTmp1)
+                inc     hl
+                ld      (pTmp1), hl
+loc_7B27:
+                ld      hl, (pTmp1)
+                ld      a, (hl)
+                ld      (Count), a
+                or      a
+                jp      z, loc_7B88
+                ld      (pTmp5), hl
+                inc     hl
+                ld      (pTmp1), hl
+                call    PushAnoZ        ; Pushes A long value from (HL) if A not zero
+                ld      (pTmp1), hl
+                ld      a, 0Ch
+                ld      hl, Count
+                sub     (hl)
+                ld      (ITX), a
+loc_7B48:                               ; Space
+                ld      (ix+0), Blank
+                inc     ix
+                ld      hl, ITX
+                dec     (hl)
+                ld      a, (ITX)
+                or      a
+                jp      nz, loc_7B48
+                ld      (ix+0), 0Ch
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                call    Write
+                ld      hl, byte_04EA
+                inc     (hl)
+                ld      a, (byte_04EA)
+                cp      5
+                jp      nz, loc_7B7B
+                call    PrintCRLF
+                xor     a
+                ld      (byte_04EA), a
+loc_7B7B:
+                ld      hl, (pTmp5)
+                ld      de, 0Ch
+                add     hl, de
+                ld      (pTmp1), hl
+                jp      loc_7B27
+; ---------------------------------------------------------------------------
+loc_7B88:
+                ld      hl, (pGLBBuffer3)
+                ld      de, 765
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      de, byte_0512
+                call    sub_980F
+                jp      loc_7B11
+; ---------------------------------------------------------------------------
+loc_7B9B:
+                ld      a, (byte_04EA)
+                or      a
+                jp      z, locret_7BA5
+                call    PrintCRLF
+locret_7BA5:
+                ret
+; End of function ShowGlb
+; =============== S U B R O U T I N E =======================================
+sub_7BA6:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      de, byte_0515
+                ld      hl, byte_0512
+                call    sub_980F
+                call    sub_79AA
+                ld      hl, (pTmp1)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (pTmp2), hl
+                ld      hl, (pTmp1)
+                ld      de, 765
+                add     hl, de
+                ld      (pTmp3), hl
+                ld      de, byte_0530
+                call    sub_980F
+                ld      de, (pTmp2)
+                ld      hl, (pTmp3)
+                or      a
+                sbc     hl, de
+                ld      (pTmp3), hl
+                ld      hl, (pTmp1)
+                ld      de, 0Bh
+                add     hl, de
+                ld      a, (hl)
+                ld      (I1), a
+                ld      de, 6
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      de, byte_052D
+                call    sub_980F
+                ld      hl, (pTmp1)
+                ld      de, 3
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      de, byte_0512
+                ld      hl, byte_0518
+                call    sub_980F
+                call    sub_7995
+                ld      hl, (pGLBBuffer3)
+                ld      (pTmp2), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (word_02B8), hl
+                ld      de, 765
+                ld      hl, (pTmp2)
+                add     hl, de
+                ld      (pTmp2), hl
+                ld      de, byte_0530
+                call    sub_980E
+                ld      hl, (pTmp2)
+                ld      (pTmp4), hl
+                ld      de, (word_02B8)
+                or      a
+                sbc     hl, de
+                ld      (pTmp2), hl
+                ld      bc, (pTmp2)
+                ld      hl, (pTmp1)
+                ex      de, hl
+                ld      hl, (pTmp3)
+                call    sub_9721
+                ld      (pTmp2), hl
+                ex      de, hl
+                ld      (pTmp1), hl
+                ld      hl, (pTmp2)
+                ld      de, 0
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pGLBBuffer3)
+                ld      (pTmp1), hl
+                ld      de, (pTmp2)
+                ld      hl, (pTmp4)
+                or      a
+                sbc     hl, de
+                ld      (pTmp4), hl
+                ex      de, hl
+                ld      hl, (pTmp1)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pTmp1)
+                ld      de, 0Bh
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      a, (hl)
+                ld      hl, I1
+                add     a, (hl)
+                ld      (tmpChar2), a
+                ld      hl, (pTmp1)
+                ld      (hl), a
+                call    sub_802B
+                call    sub_702D
+                ld      de, byte_0512
+                ld      hl, byte_0515
+                call    sub_980F
+                call    sub_9B7C
+                ld      de, byte_0512
+                ld      hl, byte_052D
+                call    sub_980F
+                call    sub_6CA6
+                ld      a, (N)
+                ld      (byte_A60B), a
+                ld      hl, (pTmp5)
+                ld      (pTmp1), hl
+                call    sub_6C8A
+                ld      a, (byte_A60B)
+                or      a
+                jp      nz, loc_7CC3
+                ld      a, (tmpChar2)
+                or      a
+                jp      z, loc_7CC3
+                call    sub_6DEB
+loc_7CC3:
+                ld      de, byte_0512
+                ld      hl, byte_0518
+                call    sub_980F
+                call    sub_79AA
+                ld      hl, (pTmp1)
+                ld      de, 11h
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      de, byte_0512
+                call    sub_980F
+                ld      hl, byte_0512
+                ld      de, byte_052A
+                call    cp3BVal         ; Compare two 3 bytes values in (DE) and (HL)
+                jp      nz, locret_7D32
+                call    sub_79AA
+                ld      hl, (pTmp1)
+                ld      de, 0Bh
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      a, (hl)
+                cp      1
+                jp      nz, loc_7D29
+                ld      de, byte_052A
+                ld      hl, byte_0518
+                call    sub_980F
+                call    sub_9B7C
+                call    sub_84BC
+                ld      de, byte_0512
+                ld      hl, byte_052A
+                call    sub_980F
+                call    sub_79AA
+                ld      hl, (pTmp1)
+                ld      de, 11h
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      de, Nil
+                call    sub_980E
+loc_7D29:
+                ld      de, byte_0512
+                ld      hl, Nil
+                call    sub_980F
+locret_7D32:
+                ret
+; End of function sub_7BA6
+; =============== S U B R O U T I N E =======================================
+sub_7D33:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (SubFL)      ; Set if variable has subscripts
+                ld      (I5), a
+                ld      hl, (word_A640)
+                ld      (pIndex), hl
+loc_7D42:
+                ld      hl, (word_02D0)
+                ld      (word_02CC), hl
+                ld      a, (byte_A697)
+                ld      (byte_A698), a
+                ld      hl, (pIndex)
+                ld      a, (hl)
+                ld      (tmpChar2), a
+                ld      hl, tmpChar2
+                inc     (hl)
+                ld      a, (byte_A697)
+                add     a, (hl)
+                ld      (byte_A697), a
+                cp      65h             ; 'e'
+                jp      c, loc_7D6C
+                xor     a
+                ld      (byte_A697), a
+                jp      Error15         ; Too many naked references
+; ---------------------------------------------------------------------------
+loc_7D6C:
+                ld      de, (word_02D0)
+                ld      hl, (pIndex)
+                ld      a, (tmpChar2)
+                call    CopyAup         ; Copy A bytes from (HL)->(DE) up
+                ld      hl, (word_02D0)
+                ld      a, (tmpChar2)
+                ld      c, a
+                ld      b, 0
+                add     hl, bc
+                ld      (word_02D0), hl
+                ld      hl, (pIndex)
+                ld      c, a
+                ld      b, 0
+                add     hl, bc
+                ld      (pIndex), hl
+                ld      hl, byte_04D0
+                inc     (hl)
+                ld      hl, I5
+                dec     (hl)
+                ld      a, (I5)
+                or      a
+                jp      nz, loc_7D42
+                ret
+; End of function sub_7D33
+; =============== S U B R O U T I N E =======================================
+sub_7DA0:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, byte_0512
+                ld      de, Nil
+                call    cp3BVal         ; Compare two 3 bytes values in (DE) and (HL)
+                jp      z, locret_7E15
+                call    sub_79AA
+                ld      hl, (pTmp1)
+                ld      de, 0Fh
+                add     hl, de
+                ld      a, (hl)
+                ld      (byte_A696), a
+                ld      de, 2
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      de, byte_0524
+                call    sub_980E
+                ld      hl, (pGLbBuffer2)
+                ld      (hl), 1
+                ld      hl, (pTmp1)
+                ld      de, 3
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      (word_A640), ix
+                call    sub_7E48
+                ld      de, byte_0521
+                ld      hl, byte_0512
+                call    sub_980F
+                ld      de, byte_0512
+                ld      hl, byte_0524
+                call    sub_980F
+                dec     ix
+                ld      a, (ix+0)
+                ld      (SubFL), a      ; Set if variable has subscripts
+                ld      a, (I1)
+                add     a, 3
+                ld      (byte_A695), a
+                xor     a
+                ld      (byte_A60B), a
+                ld      a, 0
+                ld      (byte_A696), a
+                call    sub_7305
+                ld      ix, (word_A640)
+                call    SSChk           ; Check for room on the syntax stack
+locret_7E15:
+                ret
+; End of function sub_7DA0
+; =============== S U B R O U T I N E =======================================
+sub_7E16:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      de, byte_0512
+                ld      hl, GZero
+                call    sub_980F
+                call    sub_79AA
+                ld      de, glbptrUnk
+                ld      hl, (pTmp1)
+                call    sub_980F
+                ld      hl, (pTmp1)
+                ld      de, 3
+                add     hl, de
+                ld      a, (hl)
+                ld      (UnkFL04), a    ; Set but never read
+                ld      de, 2
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (word_A648), hl
+                ret
+; End of function sub_7E16
+; =============== S U B R O U T I N E =======================================
+sub_7E48:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (pTmp1)
+                ld      (pTmp2), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (pIndex), hl
+                ld      hl, (pTmp2)
+                ld      de, 2
+                add     hl, de
+                ld      a, (hl)
+                ld      (tmpChar2), a
+                ld      (I1), a
+                inc     hl
+                ld      (pTmp2), hl
+                ld      (pTmp3), hl
+                ld      hl, (pIndex)
+                ld      bc, 0FFFDh
+                add     hl, bc
+                ld      (pIndex), hl
+                ld      a, (byte_A696)
+                cp      0
+                jp      z, loc_7EAB
+loc_7E7F:
+                ld      a, (I1)
+                or      a
+                jp      z, loc_7E98
+                ld      hl, (pTmp3)
+                ld      c, (hl)
+                ld      b, 0
+                add     hl, bc
+                inc     hl
+                ld      (pTmp3), hl
+                ld      hl, I1
+                dec     (hl)
+                jp      loc_7E7F
+; ---------------------------------------------------------------------------
+loc_7E98:
+                ld      hl, (pTmp3)
+                ld      e, (hl)
+                ld      d, 0
+                ld      hl, (pIndex)
+                or      a
+                sbc     hl, de
+                dec     hl
+                ld      (pIndex), hl
+                jp      loc_7EB5
+; ---------------------------------------------------------------------------
+loc_7EAB:
+                ld      hl, (pIndex)
+                ld      bc, 0FFFDh
+                add     hl, bc
+                ld      (pIndex), hl
+loc_7EB5:
+                ld      hl, (pTmp2)
+                ld      bc, (pIndex)
+                call    PushHLnoZ       ; Pushes BC long value from (HL) if BC not zero
+                ld      (pTmp2), hl
+                call    sub_9321
+                call    StrToChar       ; Converts a string on ToS to char (0-255)
+                ld      (I1), a
+                ld      (ix+0), a
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                ld      a, (tmpChar2)
+                ld      (ix+0), a
+                inc     ix
+                ret
+; End of function sub_7E48
+; =============== S U B R O U T I N E =======================================
+sub_7EDF:
+                ld      hl, (pGLBBuffer3)
+                ld      (pGLBBuffer1), hl
+                ld      de, 3
+                add     hl, de
+                ld      (pGLBBuffer3), hl
+                ld      (pGLbBuffer2), hl
+                ld      de, 5
+                add     hl, de
+                ld      (pGLBBuffer3), hl
+                ret
+; End of function sub_7EDF
+; =============== S U B R O U T I N E =======================================
+sub_7EF7:
+                call    SSChk           ; Check for room on the syntax stack
+                xor     a
+                ld      (byte_A699), a
+                ld      a, 0
+                ld      (byte_04DF), a
+                ld      de, byte_0518
+                ld      hl, Nil
+                call    sub_980F
+                jp      loc_7F17
+; ---------------------------------------------------------------------------
+loc_7F0F:
+                ld      a, (byte_04DF)
+                cp      0
+                jp      z, locret_7F4E
+loc_7F17:
+                ld      hl, byte_0512
+                ld      de, Nil
+                call    cp3BVal         ; Compare two 3 bytes values in (DE) and (HL)
+                jp      z, loc_7F29
+                call    sub_7305
+                jp      loc_7F0F
+; ---------------------------------------------------------------------------
+loc_7F29:
+                call    sub_79C5
+                xor     a
+                ld      (byte_A60B), a
+                call    sub_7305
+                ld      de, byte_0524
+                ld      hl, byte_0512
+                call    sub_980F
+                call    sub_702D
+                ld      de, byte_0512
+                ld      hl, byte_0518
+                call    sub_980F
+                call    sub_7DA0
+                call    sub_84BC
+locret_7F4E:
+                ret
+; End of function sub_7EF7
+; =============== S U B R O U T I N E =======================================
+sub_7F4F:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (pTmp1)
+                ld      (pTmp2), hl
+loc_7F58:
+                ld      hl, (pTmp1)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, 0
+                or      a
+                sbc     hl, de
+                jp      z, loc_7F77
+                ld      hl, (pTmp1)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, (pTmp1)
+                add     hl, de
+                ld      (pTmp1), hl
+                jp      loc_7F58
+; ---------------------------------------------------------------------------
+loc_7F77:
+                ld      hl, (pTmp1)
+                inc     hl
+                ld      (pTmp1), hl
+                ld      (pIndex), hl
+                ld      de, (word_A64E)
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      bc, (pTmp2)
+                ex      de, hl
+                ld      hl, (pIndex)
+                call    sub_972F
+                ld      (pIndex), hl
+                ex      de, hl
+                ld      (pTmp1), hl
+                ld      hl, (pIndex)
+                ld      a, (hl)
+                ld      hl, (pTmp1)
+                ld      (hl), a
+                ld      hl, (word_A64E)
+                ex      de, hl
+                ld      hl, (pTmp2)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pTmp2)
+                ld      de, 2
+                add     hl, de
+                ld      a, (SubFL)      ; Set if variable has subscripts
+                ld      (hl), a
+                inc     hl
+                ld      (pTmp2), hl
+                ld      a, (byte_A695)
+                sub     3
+                ld      (tmpChar2), a
+                ld      de, (pTmp2)
+                ld      hl, (word_A640)
+                call    CopyAup         ; Copy A bytes from (HL)->(DE) up
+                ld      hl, (pTmp2)
+                ld      a, (tmpChar2)
+                ld      c, a
+                ld      b, 0
+                add     hl, bc
+                ld      (pTmp2), hl
+                ld      a, (byte_A696)
+                cp      0
+                jp      z, loc_7FF8
+                ld      a, (byte_A694)
+                ld      (hl), a
+                inc     hl
+                ld      (pTmp2), hl
+                ld      de, (pTmp2)
+                ld      hl, (word_02F4)
+                call    CopyAup         ; Copy A bytes from (HL)->(DE) up
+                jp      loc_8001
+; ---------------------------------------------------------------------------
+loc_7FF8:
+                ld      hl, (pTmp2)
+                ld      de, byte_0521
+                call    sub_980E
+loc_8001:
+                ld      hl, (pGLBBuffer3)
+                ld      de, 0Bh
+                add     hl, de
+                ld      (pTmp1), hl
+                inc     (hl)
+                call    sub_802B
+                ld      hl, (pGLBBuffer3)
+                ld      (pTmp1), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      de, (word_A64E)
+                or      a
+                sbc     hl, de
+                ld      (word_02B8), hl
+                ex      de, hl
+                ld      hl, (pTmp1)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ret
+; End of function sub_7F4F
+; =============== S U B R O U T I N E =======================================
+sub_802B:
+                ld      hl, (pGLBBuffer3)
+                ld      de, 0Bh
+                add     hl, de
+                ld      a, (hl)
+                ld      (tmpChar2), a
+                ld      de, 9
+                add     hl, de
+                ld      (pTmp2), hl
+                ld      (PtrX), hl
+                xor     a
+                ld      (I1), a
+                ld      (N), a
+loc_8047:
+                ld      hl, I1
+                inc     (hl)
+                inc     (hl)
+                ld      a, (tmpChar2)
+                ld      hl, I1
+                cp      (hl)
+                jp      c, loc_806A
+                ld      hl, N
+                inc     (hl)
+                ld      hl, (pTmp2)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, (pTmp2)
+                add     hl, de
+                ld      (pTmp2), hl
+                jp      loc_8047
+; ---------------------------------------------------------------------------
+loc_806A:
+                ld      de, (PtrX)
+                ld      hl, (pTmp2)
+                or      a
+                sbc     hl, de
+                ld      (pTmp2), hl
+                ld      hl, (pGLBBuffer3)
+                ld      de, 0Ch
+                add     hl, de
+                ld      (pIndex), hl
+                ld      hl, (pTmp2)
+                ex      de, hl
+                ld      hl, (pIndex)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pIndex)
+                ld      de, 2
+                add     hl, de
+                ld      (pIndex), hl
+                ld      a, (N)
+                ld      (hl), a
+                ld      hl, (pGLbBuffer2)
+                ld      (hl), 1
+                ret
+; End of function sub_802B
+; =============== S U B R O U T I N E =======================================
+sub_809F:
+                ld      a, (N)
+                ld      (I4), a
+                ld      hl, (pGLBBuffer3)
+                ld      de, 0Fh
+                add     hl, de
+                ld      a, (hl)
+                ld      (byte_A696), a
+                ld      de, 5
+                add     hl, de
+                ld      (pTmp1), hl
+loc_80B7:
+                ld      a, (I4)
+                or      a
+                jp      z, locret_80D2
+                ld      hl, (pTmp1)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      hl, (pTmp1)
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      hl, I4
+                dec     (hl)
+                jp      loc_80B7
+; ---------------------------------------------------------------------------
+locret_80D2:
+                ret
+; End of function sub_809F
+; =============== S U B R O U T I N E =======================================
+sub_80D3:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (NameLen)    ; Length of the current variable name
+                ld      (Count), a
+                ld      hl, Count
+                inc     (hl)
+                ld      de, byte_9FD3
+                ld      hl, (word_02F2)
+                ld      a, (Count)
+                call    CopyAup         ; Copy A bytes from (HL)->(DE) up
+                xor     a
+                ld      (byte_04D0), a
+                ld      hl, byte_9FD3
+                ld      a, (Count)
+                ld      c, a
+                ld      b, 0
+                add     hl, bc
+                ld      (word_02CC), hl
+                ld      (word_02D0), hl
+                ld      a, 3
+                ld      (byte_A697), a
+                xor     a
+                ld      (NR), a
+                ret
+; End of function sub_80D3
+; =============== S U B R O U T I N E =======================================
+sub_810A:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (byte_A69A)
+                cp      1
+                jp      nz, loc_811A
+                ld      a, 1
+                ld      (byte_A699), a
+loc_811A:
+                ld      de, byte_0515
+                ld      hl, byte_0512
+                call    sub_980F
+                ld      de, byte_0518
+                ld      hl, byte_0512
+                call    sub_980F
+                call    sub_9AF9
+                ld      de, byte_052D
+                ld      hl, byte_0512
+                call    sub_980F
+                ld      de, byte_0512
+                ld      hl, byte_0518
+                call    sub_980F
+                call    sub_7995
+                ld      hl, (pGLBBuffer3)
+                ld      (pTmp10), hl
+                ld      (word_A64A), hl
+                ld      (pIndex), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (word_0292), hl
+                ld      hl, (pTmp10)
+                ld      de, 11
+                add     hl, de
+                ld      a, (hl)
+                ld      (N), a
+                ld      de, 5
+                add     hl, de
+                ld      a, (hl)
+                ld      (tmpChar2), a
+                ld      de, 4
+                add     hl, de
+                ld      (pTmp10), hl
+                ld      (pTmp8), hl
+                ld      a, (byte_A60B)
+                ld      hl, N
+                cp      (hl)
+                jp      z, loc_8182
+                xor     a
+                ld      (tmpChar2), a
+loc_8182:
+                ld      de, 765
+                ld      hl, (pIndex)
+                add     hl, de
+                ld      de, (word_0292)
+                or      a
+                sbc     hl, de
+                ld      (pIndex), hl
+                ld      (pTmp9), hl
+                xor     a
+                ld      (byte_A60D), a
+loc_819A:
+                ld      hl, byte_A60D
+                inc     (hl)
+                ld      hl, (pTmp10)
+                ld      (pTmp1), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (pTmp2), hl
+                ld      de, (pTmp2)
+                ld      hl, (pTmp10)
+                add     hl, de
+                ld      (pTmp10), hl
+                ld      a, (tmpChar2)
+                and     00000001b
+                jp      nz, loc_81C7
+                ld      hl, (pIndex)
+                or      a
+                sbc     hl, de
+                ld      (pIndex), hl
+loc_81C7:
+                ld      de, (pIndex)
+                ld      hl, (pTmp10)
+                or      a
+                sbc     hl, de
+                jp      c, loc_819A
+                ld      hl, byte_A60D
+                dec     (hl)
+                ld      hl, (pTmp1)
+                ld      (pTmp10), hl
+                ld      de, (pTmp8)
+                or      a
+                sbc     hl, de
+                ld      (pIndex), hl
+                ld      hl, (pTmp9)
+                ld      (word_A644), hl
+                ld      hl, (pTmp10)
+                ld      de, (pTmp2)
+                add     hl, de
+                ld      (pTmp8), hl
+                ld      de, (pTmp8)
+                ld      hl, (word_A644)
+                or      a
+                sbc     hl, de
+                ld      (word_A644), hl
+                ld      de, (word_0292)
+                add     hl, de
+                ld      (word_A642), hl
+                ld      hl, (pIndex)
+                add     hl, de
+                ld      (word_A644), hl
+                ld      a, (N)
+                ld      hl, byte_A60D
+                sub     (hl)
+                ld      (N), a
+                xor     a
+                ld      (byte_04C3), a
+                ld      a, (byte_A60D)
+                ld      hl, byte_A60B
+                cp      (hl)
+                jp      c, loc_823B
+                ld      de, (pTmp2)
+                ld      hl, (word_A642)
+                add     hl, de
+                ld      (word_A642), hl
+                jp      loc_827E
+; ---------------------------------------------------------------------------
+loc_823B:
+                ld      de, byte_0515
+                ld      hl, byte_052D
+                call    sub_980F
+                ld      a, (byte_A60B)
+                ld      hl, byte_A60D
+                sub     (hl)
+                ld      (byte_A60B), a
+                ld      hl, byte_A60B
+                dec     (hl)
+                ld      hl, byte_A60D
+                inc     (hl)
+                ld      hl, N
+                dec     (hl)
+                ld      de, (pTmp2)
+                ld      hl, (word_A644)
+                add     hl, de
+                ld      (word_A644), hl
+                ld      hl, (pTmp10)
+                add     hl, de
+                ld      (pTmp10), hl
+                ld      (pTmp1), hl
+                ld      a, (byte_A60B)
+                or      a
+                jp      nz, loc_827E
+                ld      a, 1
+                ld      (byte_04C3), a
+                jp      loc_8281
+; ---------------------------------------------------------------------------
+loc_827E:
+                call    sub_7E48
+loc_8281:
+                ld      de, byte_0512
+                ld      hl, byte_052D
+                call    sub_980F
+                call    sub_7108
+                ld      hl, (pTmp10)
+                ld      (pTmp1), hl
+                ld      hl, (pGLBBuffer3)
+                ld      de, 14h
+                add     hl, de
+                ld      (pTmp2), hl
+                ld      bc, (pTmp2)
+                ld      hl, (pTmp10)
+                ex      de, hl
+                ld      hl, (pTmp9)
+                call    sub_9721
+                ld      (pTmp2), hl
+                ex      de, hl
+                ld      (pTmp10), hl
+                ld      hl, (pTmp2)
+                ld      de, 0
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pTmp1)
+                ld      de, 0
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (word_A64A)
+                ld      (pTmp1), hl
+                ld      de, 765
+                add     hl, de
+                ld      (pTmp2), hl
+                ld      de, byte_051B
+                call    sub_980F
+                ld      hl, (pTmp2)
+                ld      de, byte_0512
+                call    sub_980E
+                ld      hl, (word_A642)
+                ex      de, hl
+                ld      hl, (pTmp1)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pTmp1)
+                ld      de, 2
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      hl, (pGLBBuffer3)
+                ld      (pTmp3), hl
+                ld      de, 765
+                add     hl, de
+                ld      (pTmp2), hl
+                ld      de, byte_051B
+                call    sub_980E
+                ld      hl, (word_A644)
+                ex      de, hl
+                ld      hl, (pTmp3)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pTmp3)
+                ld      de, 2
+                add     hl, de
+                ld      (pTmp3), hl
+                ex      de, hl
+                ld      hl, (pTmp1)
+                call    CopyHLDE        ; Copy (HL) bytes from (HL) to (DE)
+                ld      hl, (pTmp3)
+                ld      de, 9
+                add     hl, de
+                ld      a, (N)
+                ld      (hl), a
+                ld      de, 4
+                add     hl, de
+                ld      (pTmp3), hl
+                call    sub_802B
+                ld      hl, (pTmp1)
+                ld      de, 9
+                add     hl, de
+                ld      a, (byte_A60D)
+                ld      (hl), a
+                ld      de, 4
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      de, (pTmp3)
+                ld      hl, (pTmp1)
+                ld      a, 5
+                call    CopyAup         ; Copy A bytes from (HL)->(DE) up
+                ld      hl, (pTmp1)
+                inc     hl
+                ld      a, 11111110b
+                and     (hl)
+                ld      (hl), a
+                inc     hl
+                ld      (pTmp1), hl
+                ld      de, byte_0524
+                call    sub_980F
+                ld      de, byte_0512
+                ld      hl, byte_0518
+                call    sub_980F
+                call    sub_7995
+                call    sub_802B
+                ld      de, byte_0512
+                ld      hl, byte_0515
+                call    sub_980F
+                ld      a, (byte_04DF)
+                ld      (ix+0), a
+                inc     ix
+                call    sub_7305
+                dec     ix
+                ld      a, (ix+0)
+                ld      (byte_04DF), a
+                ld      de, byte_0512
+                ld      hl, byte_052D
+                call    sub_980F
+                call    sub_702D
+                ld      de, byte_0512
+                ld      hl, byte_0518
+                call    sub_980F
+                call    sub_6DEB
+                ld      a, (byte_04C3)
+                or      a
+                jp      nz, loc_8405
+                dec     ix
+                ld      a, (ix+0)
+                ld      (SubFL), a      ; Set if variable has subscripts
+                ld      (word_A640), ix
+                ld      hl, (word_A640)
+                dec     hl
+                dec     hl
+                ld      a, (hl)
+                ld      (byte_A695), a
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     hl, bc
+                ld      (word_A640), hl
+                ld      a, (byte_04DF)
+                cp      0
+                jp      z, loc_83FD
+                ld      (pTmp2), hl
+                dec     hl
+                dec     hl
+                ld      e, (hl)
+                ld      d, 0
+                or      a
+                sbc     hl, de
+                ld      (word_A640), hl
+                ld      a, (byte_A695)
+                ld      (tmpChar2), a
+                ld      hl, tmpChar2
+                inc     (hl)
+                inc     (hl)
+                ld      hl, (word_A640)
+                ex      de, hl
+                ld      hl, (pTmp2)
+                ld      a, (tmpChar2)
+                call    ShiftDn         ; Shifts the stack towards its base
+loc_83FD:
+                ld      a, (byte_A695)
+                add     a, 3
+                ld      (byte_A695), a
+loc_8405:
+                ld      a, 1
+                ld      (byte_04DF), a
+                ld      a, 0
+                ld      (byte_A696), a
+                ld      de, byte_0521
+                ld      hl, byte_052D
+                call    sub_980F
+                ld      de, byte_0512
+                ld      hl, byte_0524
+                call    sub_980F
+                ld      hl, byte_0512
+                ld      de, Nil
+                call    cp3BVal         ; Compare two 3 bytes values in (DE) and (HL)
+                jp      z, locret_8430
+                call    sub_6D48
+locret_8430:
+                ret
+; End of function sub_810A
+; =============== S U B R O U T I N E =======================================
+sub_8431:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      a, (I1)
+                or      a
+                jp      z, locret_84BB
+                ld      hl, (pGLBBuffer3)
+                ld      (pTmp6), hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (word_02B8), hl
+                ld      de, 765
+                ld      hl, (pTmp6)
+                add     hl, de
+                ld      de, (word_02B8)
+                or      a
+                sbc     hl, de
+                ld      (pTmp6), hl
+                ld      hl, (pTmp1)
+                ld      de, (pTmp2)
+                or      a
+                sbc     hl, de
+                ld      (pTmp4), hl
+                ld      hl, (pTmp2)
+                ld      (pTmp3), hl
+                ld      bc, (pTmp2)
+                ld      hl, (pTmp1)
+                ex      de, hl
+                ld      hl, (pTmp6)
+                call    sub_9721
+                ld      (pTmp2), hl
+                ex      de, hl
+                ld      (pTmp1), hl
+                ld      hl, (pTmp2)
+                ld      de, 0
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pTmp3)
+                ld      (pTmp1), hl
+                ld      de, (pTmp4)
+                ld      hl, (word_02B8)
+                add     hl, de
+                ld      (word_02B8), hl
+                ex      de, hl
+                ld      hl, (pGLBBuffer3)
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pGLBBuffer3)
+                ld      de, 0Bh
+                add     hl, de
+                ld      (pIndex), hl
+                ld      a, (hl)
+                ld      hl, I1
+                sub     (hl)
+                ld      (tmpChar2), a
+                ld      hl, (pIndex)
+                ld      (hl), a
+                call    sub_802B
+locret_84BB:
+                ret
+; End of function sub_8431
+; =============== S U B R O U T I N E =======================================
+sub_84BC:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      de, byte_0512
+                ld      hl, byte_053F
+                call    sub_980F
+                call    sub_79AA
+                ld      hl, (pTmp1)
+                inc     hl
+                ld      (pTmp1), hl
+                ld      a, (byte_054A)
+                ld      (tmpChar2), a
+loc_84D8:
+                ld      a, (tmpChar2)
+                or      a
+                jp      z, loc_84F0
+                ld      hl, (pTmp1)
+                ld      de, 0Ch
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      hl, tmpChar2
+                dec     (hl)
+                jp      loc_84D8
+; ---------------------------------------------------------------------------
+loc_84F0:
+                ld      hl, (pTmp1)
+                ld      de, 9
+                add     hl, de
+                ld      (pTmp1), hl
+                ld      de, byte_052A
+                call    sub_980E
+                ld      hl, (pGLbBuffer2)
+                ld      (hl), 1
+                ret
+; End of function sub_84BC
+; =============== S U B R O U T I N E =======================================
+sub_8506:
+                ld      de, Commands
+                jr      ScanTable
+; End of function sub_8506
+; =============== S U B R O U T I N E =======================================
+GetSVName:
+                call    sub_85AF
+                ld      hl, (Index)
+                ld      a, (hl)
+                and     11011111b       ; Make uppercase
+                cp      5Ah             ; 'Z'
+                jr      nz, GetSVName1
+                dec     b
+                inc     hl
+GetSVName1:
+                ld      de, ssvPiece
+                call    sub_85E9
+                jr      nc, ScanTable1
+                jp      Error05         ; Illegal command name
+; End of function GetSVName
+; =============== S U B R O U T I N E =======================================
+GetFunName:
+                call    sub_85AF
+                push    af
+                ld      hl, (Index)
+                ld      a, (hl)
+                and     11011111b       ; Make uppercase
+                cp      5Ah             ; 'Z'
+                jr      z, GetFunName2
+                pop     af
+                jr      c, GetFunName1
+                ld      de, svHorolog   ; Start of the special varibles table
+                jr      GetFunName4
+; ---------------------------------------------------------------------------
+GetFunName1:
+                ld      de, Functions
+                jr      ScanTable
+; ---------------------------------------------------------------------------
+GetFunName2:
+                dec     b
+                inc     hl
+                pop     af
+                jr      c, GetFunName3
+                ld      de, svzCount
+                jr      GetFunName4
+; ---------------------------------------------------------------------------
+GetFunName3:
+                ld      de, sfzCheck
+GetFunName4:
+                call    sub_85E9
+                jr      nc, ScanTable1
+                jp      Error05         ; Illegal command name
+; ---------------------------------------------------------------------------
+ScanTable:
+                ld      hl, (Index)
+                ld      a, (hl)
+                and     11011111b       ; Make uppercase
+                cp      5Ah             ; 'Z'
+                jr      z, ScanTable4
+                sub     41h             ; 'A'
+                jp      c, Error05      ; Illegal command name
+                cp      19h
+                jp      nc, Error05     ; Illegal command name
+                add     a, a
+                add     a, a
+                ld      c, a
+                ld      b, 0
+                ex      de, hl
+                add     hl, bc
+                inc     de
+                ld      a, (de)
+                cp      41h             ; 'A'
+                jr      nc, ScanTable3
+ScanTable1:
+                ld      a, (de)
+                cp      LeftP
+                jr      z, ScanTable2
+                dec     de
+ScanTable2:
+                ex      de, hl
+                ld      (Index), hl
+                call    GToken          ; Loads to (Token) the token code of char (++pStkPos)
+                ld      a, (de)
+                ld      l, a
+                inc     de
+                ld      a, (de)
+                ld      h, a
+                xor     a
+                ld      (Locks), a
+                jp      (hl)
+; ---------------------------------------------------------------------------
+ScanTable3:
+                inc     hl
+                inc     hl
+                ld      a, (hl)
+                inc     hl
+                ld      h, (hl)
+                ld      l, a
+                or      h
+                jp      z, Error05      ; Illegal command name
+                call    sub_85CB
+                jr      nc, ScanTable1
+                jp      Error05         ; Illegal command name
+; ---------------------------------------------------------------------------
+ScanTable4:
+                call    sub_85AF
+                dec     b
+                inc     hl
+                ld      de, sczSave
+                call    sub_85E9
+                jr      nc, ScanTable1
+                jp      Error05         ; Illegal command name
+; End of function GetFunName
+; =============== S U B R O U T I N E =======================================
+sub_85AF:
+                push    hl
+                ld      hl, (Index)
+                ld      b, 0
+loc_85B5:
+                ld      a, (hl)
+                cp      LeftP           ; Left Parentheses
+                jr      z, loc_85C8
+                and     11011111b       ; Make uppercase
+                cp      41h             ; 'A'
+                jr      c, loc_85C8
+                cp      LeftB           ; Left bracket
+                jr      nc, loc_85C9
+                inc     hl
+                inc     b
+                jr      loc_85B5
+; ---------------------------------------------------------------------------
+loc_85C8:
+                ccf
+loc_85C9:
+                pop     hl
+                ret
+; End of function sub_85AF
+; =============== S U B R O U T I N E =======================================
+sub_85CB:
+                ld      b, 0
+                ld      a, (hl)
+loc_85CE:
+                push    de
+                ld      c, a
+                inc     hl
+loc_85D1:
+                ld      a, (de)
+                and     11011111b       ; Make uppercase
+                cp      (hl)
+                jr      nz, loc_85DF
+                inc     de
+                inc     hl
+                dec     c
+                jr      nz, loc_85D1
+                pop     bc
+                or      a
+                ret
+; ---------------------------------------------------------------------------
+loc_85DF:
+                pop     de
+                add     hl, bc
+                inc     hl
+                inc     hl
+                ld      a, (hl)
+                or      a
+                jr      nz, loc_85CE
+                scf
+                ret
+; End of function sub_85CB
+; =============== S U B R O U T I N E =======================================
+sub_85E9:
+                ex      de, hl
+                ld      a, b
+                cp      1
+                jr      z, loc_85F3
+                call    sub_85CB
+                ret
+; ---------------------------------------------------------------------------
+loc_85F3:
+                dec     b
+loc_85F4:
+                ld      a, (hl)
+                or      a
+                jr      z, loc_8607
+                ld      c, a
+                inc     hl
+                ld      a, (de)
+                and     11011111b       ; Make uppercase
+                cp      (hl)
+                add     hl, bc
+                jr      z, loc_8605
+                inc     hl
+                inc     hl
+                jr      loc_85F4
+; ---------------------------------------------------------------------------
+loc_8605:
+                inc     de
+                scf
+loc_8607:
+                ccf
+                ret
+; End of function sub_85E9
+; ---------------------------------------------------------------------------
+Commands        dw Error05              ; Illegal command name
+                dw 0
+                dw ecBreak              ; Entry point of BREAK command
+                dw scBreak
+                dw ecClose              ; Entry point of CLOSE command
+                dw scClose
+                dw ecDo                 ; Entry point of DO command
+                dw scDo
+                dw ecElse               ; Entry point of ELSE command
+                dw scElse
+                dw ecFor                ; Entry point of FOR command
+                dw scFor
+                dw ecGoto               ; Entry point of GOTO command
+                dw scGoto
+                dw ecHangHalt           ; Ambiguous H commands
+                dw scHang
+                dw ecIf                 ; Entry point of IF command
+                dw scIf
+                dw Error05              ; Illegal command name
+                dw 0
+                dw ecKill               ; Entry point of KILL comand
+                dw scKill
+                dw ecLock               ; Entry point of LOCK command
+                dw scLock
+                dw Error05              ; Illegal command name
+                dw 0
+                dw Error05              ; Illegal command name
+                dw 0
+                dw ecOpen               ; Entry point of OPEN command
+                dw scOpen
+                dw ecPrint              ; Entry point of PRINT/ZPRINT command
+                dw scPrint
+                dw ecQuit               ; Entry point of QUIT command
+                dw scQuit
+                dw ecRead               ; Entry point of READ command
+                dw scRead
+                dw ecSet                ; Entry point of SET command
+                dw scSet
+                dw Error05              ; Illegal command name
+                dw 0
+                dw ecUse                ; Entry point of USE command
+                dw scUse
+                dw ecView               ; Entry point of VIEW command
+                dw scView
+                dw ecWrite              ; Entry point of WRITE command
+                dw scWrite
+                dw ecXecute             ; Entry point of XECUTE command
+                dw scXecute
+                dw Error05              ; Illegal command name
+                dw 0
+scBreak         db 4,'REAK'
+                dw ecBreak              ; Entry point of BREAK command
+                db 0
+scClose         db 4,'LOSE'
+                dw ecClose              ; Entry point of CLOSE command
+                db 0
+scDo            db 1,'O'
+                dw ecDo                 ; Entry point of DO command
+                db 0
+scElse          db 3,'LSE'
+                dw ecElse               ; Entry point of ELSE command
+                db 0
+scFor           db 2,'OR'
+                dw ecFor                ; Entry point of FOR command
+                db 0
+scGoto          db 3,'OTO'
+                dw ecGoto               ; Entry point of GOTO command
+                db 0
+scHang          db 3,'ANG'
+                dw ecHang               ; Entry point of HANG command
+scHalt          db 3,'ALT'
+                dw ecHalt               ; Entry point of HALT command
+                db 0
+scIf            db 1,'F'
+                dw ecIf                 ; Entry point of IF command
+                db 0
+scKill          db 3,'ILL'
+                dw ecKill               ; Entry point of KILL comand
+                db 0
+scLock          db 3,'OCK'
+                dw ecLock               ; Entry point of LOCK command
+                db 0
+scOpen          db 3,'PEN'
+                dw ecOpen               ; Entry point of OPEN command
+                db 0
+scPrint         db 4,'RINT'
+                dw ecPrint              ; Entry point of PRINT/ZPRINT command
+                db 0
+scQuit          db 3,'UIT'
+                dw ecQuit               ; Entry point of QUIT command
+                db 0
+scRead          db 3,'EAD'
+                dw ecRead               ; Entry point of READ command
+                db 0
+scSet           db 2,'ET'
+                dw ecSet                ; Entry point of SET command
+                db 0
+scUse           db 2,'SE'
+                dw ecUse                ; Entry point of USE command
+                db 0
+scView          db 3,'IEW'
+                dw ecView               ; Entry point of VIEW command
+                db 0
+scWrite         db 4,'RITE'
+                dw ecWrite              ; Entry point of WRITE command
+                db 0
+scXecute        db 5,'ECUTE'
+                dw ecXecute             ; Entry point of XECUTE command
+                db 0
+; ---------------------------------------------------------------------------
+Functions       dw efAscii              ; Entry point of $ASCII function
+                dw sfAscii
+                dw Error05              ; Illegal command name
+                dw 0
+                dw efChar               ; Entry point of $CHAR function
+                dw sfChar
+                dw efData               ; Entry point of $DATA function
+                dw sfData
+                dw efExtract            ; Entry point of $EXTRACT function
+                dw sfExtract
+                dw efFind               ; Entry point of $FIND function
+                dw sfFind
+                dw Error05              ; Illegal command name
+                dw 0
+                dw Error05              ; Illegal command name
+                dw 0
+                dw Error05              ; Illegal command name
+                dw 0
+                dw efJustify            ; Entry point of $JUSTIFY function
+                dw sfJustify
+                dw Error05              ; Illegal command name
+                dw 0
+                dw efLength             ; Entry point of $LENGTH function
+                dw sfLength
+                dw Error05              ; Illegal command name
+                dw 0
+                dw efNext               ; Entry point of $NEXT function
+                dw sfNext
+                dw efOrder              ; Entry point of $ORDER function
+                dw sfOrder
+                dw efPiece              ; Entry point of $PIECE command
+                dw sfPiece
+                dw Error05              ; Illegal command name
+                dw 0
+                dw efRandom             ; Entry point of $RANDOM function
+                dw sfRandom
+                dw efSelect             ; Entry point of $SELECT function
+                dw sfSelect
+                dw efText               ; Entry point of $TEXT function
+                dw sfText
+                dw Error05              ; Illegal command name
+                dw 0
+                dw efView               ; Entry point of $VIEW function (not implemented)
+                dw sfView
+                dw Error05              ; Illegal command name
+                dw 0
+                dw Error05              ; Illegal command name
+                dw 0
+                dw Error05              ; Illegal command name
+                dw 0
+sfAscii         db 4,'SCII'
+                dw efAscii              ; Entry point of $ASCII function
+                db 0
+sfChar          db 3,'HAR'
+                dw efChar               ; Entry point of $CHAR function
+                db 0
+sfData          db 3,'ATA'
+                dw efData               ; Entry point of $DATA function
+                db 0
+sfExtract       db 6,'XTRACT'
+                dw efExtract            ; Entry point of $EXTRACT function
+                db 0
+sfFind          db 3,'IND'
+                dw efFind               ; Entry point of $FIND function
+                db 0
+sfJustify       db 6,'USTIFY'
+                dw efJustify            ; Entry point of $JUSTIFY function
+                db 0
+sfLength        db 5,'ENGTH'
+                dw efLength             ; Entry point of $LENGTH function
+                db 0
+sfNext          db 3,'EXT'
+                dw efNext               ; Entry point of $NEXT function
+                db 0
+sfOrder         db 4,'RDER'
+                dw efOrder              ; Entry point of $ORDER function
+                db 0
+sfPiece         db 4,'IECE'
+                dw efPiece              ; Entry point of $PIECE command
+                db 0
+sfRandom        db 5,'ANDOM'
+                dw efRandom             ; Entry point of $RANDOM function
+                db 0
+sfSelect        db 5,'ELECT'
+                dw efSelect             ; Entry point of $SELECT function
+                db 0
+sfText          db 3,'EXT'
+                dw efText               ; Entry point of $TEXT function
+                db 0
+sfView          db 3,'IEW'
+                dw efView               ; Entry point of $VIEW function (not implemented)
+                db 0
+; ---------------------------------------------------------------------------
+svHorolog       db 7,'HOROLOG'
+                dw evHorolog            ; Entry point of $HOROLOG variable
+svIo            db 2,'IO'
+                dw evIo                 ; Entry point of $IO variable
+svJob           db 3,'JOB'
+                dw evJob                ; Entry point of $JOB variable
+svStorage       db 7,'STORAGE'
+                dw evStorage            ; Entry point of $STORAGE variable
+svTest          db 4,'TEST'
+                dw evTest               ; Entry point of $TEST variable
+svX             db 1,'X'
+                dw evX                  ; Entry point of $X variable
+svY             db 1,'Y'
+                dw evY                  ; Entry point of $Y variable
+                db 0
+; ---------------------------------------------------------------------------
+sczSave         db 4,'SAVE'
+                dw eczSave              ; Entry point of ZSAVE command
+sczLoad         db 4,'LOAD'
+                dw eczLoad              ; Entry point of ZLOAD command
+sczPrint        db 5,'PRINT'
+                dw ecPrint              ; Entry point of PRINT/ZPRINT command
+sczDelete       db 6,'DELETE'
+                dw eczDelete            ; Entry point of ZDELETE command
+sczRemove       db 6,'REMOVE'
+                dw eczRemove            ; Entry point of ZREMOVE command
+sczMove         db 4,'MOVE'
+                dw eczMove              ; Entry point of ZMOVE command
+sczGo           db 2,'GO'
+                dw eczGo                ; Entry point of ZGO command
+sczInsert       db 6,'INSERT'
+                dw eczInsert            ; Entry point of ZINSERT command
+sczOption       db 6,'OPTION'
+                dw eczOption            ; Entry point of ZOPTION command
+                db 0
+; ---------------------------------------------------------------------------
+svzCount        db 5,'COUNT'
+                dw evzCount             ; Entry point of $ZCOUNT variable
+svzError        db 5,'ERROR'
+                dw esvError             ; Entry point of $ERROR variable
+svzGlobal       db 6,'GLOBAL'
+                dw evzGlobal            ; Entry point of $ZGLOBAL variable
+svzName         db 4,'NAME'
+                dw evzName              ; Entry point of $ZNAME variable
+svzRoutine      db 7,'ROUTINE'
+                dw evzRoutine           ; Entry point of $ZROUTINE variable
+                db 0
+; ---------------------------------------------------------------------------
+sfzCheck        db 5,'CHECK'
+                dw efzCheck             ; Entry point of $ZCHECK function
+sfzExists       db 6,'EXISTS'
+                dw efzExists            ; Entry point of $ZEXISTS function
+sfzOrder        db 5,'ORDER'
+                dw efzOrder             ; Entry point of $ZORDER function
+                db 0
+; ---------------------------------------------------------------------------
+ssvPiece        db 5,'PIECE'
+                dw esvPiece             ; Entry point of $PIECE variable
+ssvError        db 5,'ERROR'
+                dw esvError             ; Entry point of $ERROR variable
+ssvX            db 1,'X'
+                dw evX                  ; Entry point of $X variable
+ssvY            db 1,'Y'
+                dw evY                  ; Entry point of $Y variable
+                db 0
+; =============== S U B R O U T I N E =======================================
+; Loads to (Token) the token code of char (++pStkPos)
+GToken:
+                ld      hl, (Index)
+                inc     hl
+                ld      (Index), hl
+                ld      l, (hl)
+                ld      h, TokenTable
+                ld      a, (hl)
+                ld      (Token), a
+                ret
+; End of function GToken
+; =============== S U B R O U T I N E =======================================
+; GetChar (BIOS call)
+BGetChar:
+                ld      a, 0
+                ld      (Result), a     ; Holds the result of called function
+                ld      l, 3            ; Console status
+                call    BIOScall
+                or      a
+                ret     z               ; Nothing there
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ld      l, 6            ; Console input
+                call    BIOScall
+                ld      (tmpChar1), a
+                cp      16              ; ^P
+                jr      nz, BGetChar1
+                ld      a, (PrintTgl)
+                xor     00000001b
+                ld      (PrintTgl), a
+                ret
+; ---------------------------------------------------------------------------
+BGetChar1:                              ; ^S
+                cp      19
+                ret     nz
+                ld      a, 1
+                ld      (StopTgl), a
+                ret
+; End of function BGetChar
+; =============== S U B R O U T I N E =======================================
+; GetChar if A!=0x00 (BIOS call)
+BGetChar2:
+                ld      a, (bBreakVal)  ; Value passed to BREAK command
+                or      a
+                ret     z
+                ld      l, 3            ; Console status
+                call    BIOScall
+                or      a
+                ret     z
+                ld      l, 6            ; Console input
+                call    BIOScall
+                cp      3               ; ^C
+                jp      z, PrintErr17
+                cp      16              ; ^P
+                jr      nz, BGetChar3
+                ld      a, (PrintTgl)
+                xor     00000001b
+                ld      (PrintTgl), a
+                ret
+; ---------------------------------------------------------------------------
+BGetChar3:                              ; ^S
+                cp      19
+                ret     nz
+                ld      a, 1
+                ld      (StopTgl), a
+                ret
+; End of function BGetChar2
+; =============== S U B R O U T I N E =======================================
+; Outputs error message
+PrintErr:
+                push    af
+                cp      1               ; Is it Stack Overflow?
+                jr      nz, PrintErr1
+                ld      ix, (pSymStack) ; Symbol stack
+                ld      hl, (pPlus1000)
+                ld      sp, hl
+                xor     a
+                ld      (BreakFL), a    ; 1=On Break
+                ld      (byte_A6A3), a
+PrintErr1:
+                ld      a, (byte_A69F)
+                or      a
+                jr      z, PrintErr2
+                ld      hl, (pIndex)
+                ld      (Index), hl
+PrintErr2:
+                ld      a, (Mode)
+                cp      1
+                jp      z, PrintErr4
+                ld      a, (byte_A6A3)
+                or      a
+                jp      z, PrintErr4
+                ld      hl, 2047h       ; (todo) Check this
+                ld      (D0Buffer), hl  ; Device 0 (console) buffer
+                ld      a, (byte_A04B)
+                ld      c, a
+                add     a, 2
+                ld      (CmdLineSz), a  ; Size of the command line
+                ld      b, 0
+                ld      de,  D0Buffer+2 ; Device 0 (console) buffer
+                ld      hl, ArgPl
+                ldir
+                ex      de, hl
+                ld      (hl), 0Dh
+                pop     af
+                call    CharToStr       ; Convert char in A to string and push it
+                dec     ix
+                dec     ix
+                ld      b, (ix+0)
+                ld      a, Semicolon
+                call    sub_8B33        ; Puts A into the stack (IX)
+                push    bc
+                ld      hl, errLabel    ; Label where the error ocurred
+                call    PushSTR         ; Pushes a MStr into the stack
+                pop     bc
+                call    sub_8B3A
+                ld      hl, errIndex    ; Offset from the label where the error ocurred
+                ld      c, 5
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jr      z, PrintErr3
+                ld      a, Plus
+                call    sub_8B33        ; Puts A into the stack (IX)
+                push    bc
+                call    BCD5ToStr       ; Convert BCD5 in (HL) to string and push it
+                pop     bc
+                call    sub_8B3A
+PrintErr3:
+                ld      a, Carat
+                call    sub_8B33        ; Puts A into the stack (IX)
+                push    bc
+                ld      hl, (pRtnName)  ; Pointer to the current routine name
+                call    PushSTR         ; Pushes a MStr into the stack
+                pop     bc
+                call    sub_8B3A
+                ld      a, Semicolon
+                call    sub_8B33        ; Puts A into the stack (IX)
+                ld      hl, (Index)
+                ld      de, (pStkStart)
+                or      a
+                sbc     hl, de
+                ld      (pIndex), hl
+                push    bc
+                call    sub_9321
+                pop     bc
+                call    sub_8B3A
+                ld      (ix+0), b
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                ld      hl, byte_A04B
+                call    pullNumber      ; Pulls a number in MStr format from the stack into (HL)
+                call    sub_8B22
+                xor     a
+                ld      (byte_A6A3), a
+                ld      a, 1
+                ld      (byte_04FF), a
+                ld      hl, D0Buffer    ; Device 0 (console) buffer
+                ld      (Index), hl
+                ld      (pStkStart), hl
+                call    sub_8B17
+                ret
+; ---------------------------------------------------------------------------
+PrintErr4:                              ; Outputs a CrLf
+                call    putCrLf
+                call    putAsterisk     ; Places an asterisk under the error position
+                ld      de, ErrorsFCB   ; FCB for the errors file
+                ld      a, (ErrorsDR)   ; Drive for the errors file
+                inc     a
+                ld      (de), a
+                ld      c, OpenFile     ; BDOS call 15
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+                cp      0FFh            ; Did it fail?
+                jp      nz, PrintErr6
+                pop     af
+                ld      hl, sErr2
+                ld      (hl), Slash
+PrintErr5:
+                inc     (hl)
+                sub     0Ah
+                jp      nc, PrintErr5
+                add     a, Colon
+                inc     hl
+                ld      (hl), a
+                ld      hl, sErr1
+                jp      PrintErr7
+; ---------------------------------------------------------------------------
+PrintErr6:
+                pop     af
+                ld      l, a
+                ld      h, 0
+                add     hl, hl
+                add     hl, hl
+                add     hl, hl
+                add     hl, hl
+                add     hl, hl
+                ld      a, l
+                and     01111111b
+                ld      e, a
+                ld      a, l
+                and     10000000b
+                ld      l, a
+                add     hl, hl
+                ld      d, h
+                push    de
+                ld      de, Page0BUF    ; Default buffer for reading sequential files (80h-FFh)
+                ld      c, SetDMA       ; BDOS call 26
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+                pop     de
+                push    de
+                ld      hl, ErrorsFCB+32 ; FCB for the errors file
+                ld      (hl), d
+                ld      de, ErrorsFCB   ; FCB for the errors file
+                ld      c, ReadNext     ; BDOS call 20
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+                pop     de
+                ld      d, 0
+                ld      hl, Page0Buf
+                add     hl, de          ; Points to the error message
+PrintErr7:
+                ld      a, (hl)
+                cp      0Dh
+                jp      z, PrintErr8
+                call    putChar         ; Outputs the character on A to the console
+                inc     hl
+                jr      PrintErr7
+; ---------------------------------------------------------------------------
+PrintErr8:                              ; Outputs a CrLf
+                call    putCrLf
+                call    putCrLf         ; Outputs a CrLf
+                ld      a, (Mode)
+                cp      0
+                jp      z, PrintErr16
+PrintErr9:
+                cp      1
+                jp      z, PrintErr19
+                ld      b, a
+                ld      hl, (Index)
+PrintErr10:
+                ld      a, (hl)
+                cp      CR
+                jr      z, PrintErr11
+                inc     hl
+                jr      PrintErr10
+; ---------------------------------------------------------------------------
+PrintErr11:
+                inc     hl
+                inc     hl
+                ld      a, b
+                cp      2
+                jp      z, PrintErr12
+                ld      bc, 6
+                add     hl, bc
+                ld      (TPP), hl
+                ld      ix, (TPP)
+                call    IndRet          ; Return from indirection
+                ld      hl, sIndirection
+                jp      PrintErr15
+; ---------------------------------------------------------------------------
+PrintErr12:
+                inc     hl
+                inc     hl
+                inc     hl
+                inc     hl
+                ld      b, 3
+PrintErr13:
+                ld      a, (hl)
+                cp      10h
+                jr      c, PrintErr14
+                inc     hl
+                jr      PrintErr13
+; ---------------------------------------------------------------------------
+PrintErr14:
+                inc     hl
+                inc     hl
+                djnz    PrintErr13
+                inc     hl
+                inc     hl
+                inc     hl
+                ld      (TPP), hl
+                ld      ix, (TPP)
+                call    sub_69DD
+                ld      hl, sXecute
+PrintErr15:                             ; Outputs a Mumps string (1st byte is the size) in (HL)
+                call    putMStr
+                call    putAsterisk     ; Places an asterisk under the error position
+                ld      a, (Mode)
+                cp      0
+                jp      nz, PrintErr9
+PrintErr16:
+                call    putErrLine
+                jr      PrintErr19
+; ---------------------------------------------------------------------------
+PrintErr17:
+                ld      a, (Mode)
+                cp      1
+                jr      z, PrintErr18
+                xor     a
+                ld      (Case), a
+                ld      (Mode), a
+                ld      (Auto), a
+                call    bcBreak         ; Body of BREAK command
+                call    sub_55D2
+                call    sub_8B17
+                ret
+; ---------------------------------------------------------------------------
+PrintErr18:
+                ld      sp, (pPlus1000)
+                xor     a
+                ld      (BreakFL), a    ; 1=On Break
+                ld      (Auto), a
+PrintErr19:                             ; Outputs a CrLf
+                call    putCrLf
+                xor     a
+                ld      (DeviceInUse), a
+                call    DevPrepare      ; Prepares current device for use
+                call    sub_8B17
+                ld      a, (BreakFL)    ; 1=On Break
+                or      a
+                jp      z, PrintErr20
+                call    sub_8B22
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     ix, bc
+                jp      PrintErr21
+; ---------------------------------------------------------------------------
+PrintErr20:                             ; Symbol stack
+                ld      ix, (pSymStack)
+                ld      sp, (pPlus1000)
+PrintErr21:                             ; bit0:String
+                ld      a, (bmFlag1)    ; bit1:Not
+                                        ; bit2:Dirty
+                                        ; bit4:Break
+                and     00001100b
+                ld      (bmFlag1), a    ; bit0:String
+                                        ; bit1:Not
+                                        ; bit2:Dirty
+                                        ; bit4:Break
+                jp      Main            ; Prepare initial execution
+; End of function PrintErr
+; =============== S U B R O U T I N E =======================================
+sub_8B17:
+                xor     a
+                ld      (Wait), a
+                ld      (Time), a
+                ld      (byte_04FD), a
+                ret
+; End of function sub_8B17
+; =============== S U B R O U T I N E =======================================
+sub_8B22:
+                pop     bc
+                ld      de, 2179        ; (todo) Check this
+loc_8B26:
+                pop     hl
+                or      a
+                sbc     hl, de
+                jr      nz, loc_8B26
+                push    de
+                push    bc
+                ld      ix, (word_A652)
+                ret
+; End of function sub_8B22
+; =============== S U B R O U T I N E =======================================
+; Puts A into the stack (IX)
+sub_8B33:
+                ld      (ix+0), a
+                inc     ix
+                inc     b
+                ret
+; End of function sub_8B33
+; =============== S U B R O U T I N E =======================================
+sub_8B3A:
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                add     a, b
+                ld      b, a
+                ret
+; End of function sub_8B3A
+; =============== S U B R O U T I N E =======================================
+; Compares two strings (sets BC=INTLN*257 first)
+SCmp0:
+                ld      bc, INTLN*257
+; End of function SCmp0
+; =============== S U B R O U T I N E =======================================
+; Compares two strings
+SCmp:
+                push    hl
+                push    de
+                push    bc
+                call    SCmpB           ; Compares two strings in (DE) and (HL)
+                pop     bc
+                pop     de
+                pop     hl
+                ret
+; End of function SCmp
+; =============== S U B R O U T I N E =======================================
+; Compares two strings in (DE) and (HL)
+SCmpB:
+                ld      a, b
+                or      a
+                jr      nz, SCmpB1
+                or      c
+                ret     z
+                jp      SCmpB2
+; ---------------------------------------------------------------------------
+SCmpB1:
+                ld      a, c
+                or      a
+                jr      z, SCmpB2
+                ld      a, (de)
+                cp      (hl)
+                ret     nz
+                inc     hl
+                inc     de
+                dec     b
+                dec     c
+                jp      SCmpB           ; Compares two strings in (DE) and (HL)
+; ---------------------------------------------------------------------------
+SCmpB2:
+                cp      b
+                ret
+; End of function SCmpB
+; =============== S U B R O U T I N E =======================================
+NumOP:
+                ld      a, (I6)
+                push    af
+                ld      a, (I1)
+                ld      c, a
+                ld      b, FLTLN        ; Size of a Float/BCD (14)
+                ld      hl, (pTmp2)
+                ld      de, lbcdTemp1
+                call    BCDPack         ; Packs a C long string in (HL) into BCD form
+                ld      (Signal1), a
+                ld      a, (Count)
+                ld      (DecPlaces1), a
+                ld      a, (I2)
+                ld      c, a
+                ld      hl, (pTmp3)
+                ld      de, lbcdTemp2
+                call    BCDPack         ; Packs a C long string in (HL) into BCD form
+                ld      (Signal2), a
+                ld      a, (Count)
+                ld      (DecPlaces2), a
+NumOP2:
+                ld      c, a
+                ld      a, (DecPlaces1)
+                ld      b, a
+                pop     af
+                cp      13
+                jr      nc, NumOP3
+                cp      7
+                jp      nc, NumOP13
+                cp      5
+                jr      z, NumOP4
+NumOP3:                                 ; Change sign of OP2
+                ld      a, (Signal2)
+                xor     00000001b
+                ld      (Signal2), a
+NumOP4:
+                ld      a, b
+                sub     c
+                jr      z, NumOP10
+                jr      c, NumOP5
+                ld      c, b
+                ld      b, a
+                ld      hl, I2
+                ld      a, FLTLN*2
+                sub     (hl)
+                cp      b
+                ld      hl, lbcdTemp2
+                jr      nc, NumOP8
+                ld      de, lbcdTemp1
+                ex      de, hl
+                call    CopyCDEHL       ; Copy C bytes from (DE) to (HL)
+                ld      a, (DecPlaces2)
+                ld      (DecPlaces1), a
+                jr      NumOP6
+; ---------------------------------------------------------------------------
+NumOP5:
+                cpl
+                inc     a
+                ld      b, a
+                ld      hl, I1
+                ld      a, FLTLN*2
+                sub     (hl)
+                cp      b
+                jr      c, NumOP6
+                jr      NumOP7
+; ---------------------------------------------------------------------------
+NumOP6:
+                ld      a, (I6)
+                cp      13
+                jp      nc, NumOP25
+                jp      NumOP32
+; ---------------------------------------------------------------------------
+NumOP7:
+                ld      hl, lbcdTemp1
+NumOP8:
+                push    bc
+                ld      c, FLTLN        ; Size of a Float/BCD (14)
+NumOP9:                                 ; Multiply a BCD by 10
+                call    Times10
+                djnz    NumOP9
+                pop     bc
+NumOP10:
+                ld      a, c
+                ld      (DecPlaces1), a
+                ld      hl, Signal1
+                ld      a, (Signal2)
+                cp      (hl)
+                ld      hl, lbcdTemp1
+                ld      de, lbcdTemp2
+                ld      c, FLTLN        ; Size of a Float/BCD (14)
+                jr      nz, NumOP11
+                ld      a, (I6)
+                cp      13
+                jp      nc, NumOP25
+                call    AbcdDEHL        ; Adds two C bytes long BCDs in (DE) and (HL)
+                                        ; result goes in (HL)
+                jp      NumOP32
+; ---------------------------------------------------------------------------
+NumOP11:                                ; Size of a Float/BCD (14)
+                ld      b, FLTLN
+                call    SCmp            ; Compares two strings
+                jr      c, NumOP12
+                ex      de, hl
+                ld      a, (Signal2)
+                ld      (Signal1), a
+NumOP12:
+                push    af
+                ld      a, (I6)
+                cp      13
+                jp      nc, NumOP24
+                pop     af
+                call    SbcdDEHL        ; Subtracts two C bytes long BCDs in (DE) and (HL)
+                                        ; result goes in (HL)
+                jp      NumOP32
+; ---------------------------------------------------------------------------
+NumOP13:
+                cp      9
+                jr      z, NumOP14
+                cp      11
+                jp      nc, NumOP22
+                push    af
+                ld      hl, Signal1
+                ld      a, (Signal2)
+                xor     (hl)
+                ld      (Signal1), a
+                pop     af
+                cp      7
+                jr      nz, NumOP14
+                ld      a, b
+                add     a, c
+                ld      (DecPlaces1), a
+                ld      hl, lbcdTemp1
+                ld      de, lbcdTemp2
+                ld      c, FLTLN        ; Size of a Float/BCD (14)
+                call    MbcdDEHL        ; Multiplies two C bytes long BCD in (DE) and (HL)
+                                        ; result goes in ibcdResult
+                ld      hl, ibcdResult  ; Operation result
+                jp      NumOP32
+; ---------------------------------------------------------------------------
+NumOP14:
+                push    af
+                cp      9
+                jr      nz, NumOP15
+                ld      hl, byte_9F15
+                ld      de, lbcdTemp1
+                push    bc
+                ld      c, FLTLN        ; Size of a Float/BCD (14)
+                call    CopyCDEHL       ; Copy C bytes from (DE) to (HL)
+                pop     bc
+NumOP15:
+                ld      a, b
+                sub     c
+                jr      c, NumOP16
+                ld      b, a
+                jr      NumOP18
+; ---------------------------------------------------------------------------
+NumOP16:
+                ld      hl, lbcdTemp1
+                ld      c, FLTLN        ; Size of a Float/BCD (14)
+                cpl
+                inc     a
+                ld      b, a
+NumOP17:                                ; Multiply a BCD by 10
+                call    Times10
+                djnz    NumOP17
+NumOP18:
+                pop     af
+                cp      8
+                jr      nz, NumOP19
+                ld      hl, lbcdTemp1
+                ld      de, lbcdTemp2
+                ld      c, FLTLN        ; Size of a Float/BCD (14)
+                call    Divide          ; BCD divide with a fractional remainder
+                ld      hl, byte_9F23
+                ld      a, b
+                ld      (DecPlaces1), a
+                jp      NumOP32
+; ---------------------------------------------------------------------------
+NumOP19:
+                cp      9
+                jr      nz, NumOP21
+                ld      hl, lbcdTemp1
+                ld      de, lbcdTemp2
+                ld      c, FLTLN        ; Size of a Float/BCD (14)
+                call    Divide          ; BCD divide with a fractional remainder
+                ld      de, byte_9F23
+                call    IDbcdDEHL       ; Integer divide a C bytes long BCD in (DE) and (HL)
+                ld      a, b
+                or      a
+                jr      z, NumOP20
+                ld      a, (Signal1)
+                ld      hl, 1265
+                cp      (hl)
+                ld      hl, lbcdTemp1
+                jr      z, NumOP20
+                call    IbcdHL          ; Increments by 1 the C bytes long BCD in (HL)
+NumOP20:
+                ld      de, lbcdTemp2
+                call    MbcdDEHL        ; Multiplies two C bytes long BCD in (DE) and (HL)
+                                        ; result goes in ibcdResult
+                ld      hl, lbcdTemp1
+                ld      de, byte_9F15
+                call    CopyCDEHL       ; Copy C bytes from (DE) to (HL)
+                ld      hl, lbcdTemp2
+                ld      de, ibcdResult  ; Operation result
+                call    CopyCDEHL       ; Copy C bytes from (DE) to (HL)
+                ld      a, (Signal1)
+                ld      (Signal2), a
+                ld      a, 2
+                push    af
+                ld      a, (DecPlaces2)
+                jp      NumOP2
+; ---------------------------------------------------------------------------
+NumOP21:
+                cp      10
+                jr      nz, NumOP22
+                ld      hl, lbcdTemp1
+                ld      de, lbcdTemp2
+                ld      c, FLTLN        ; Size of a Float/BCD (14)
+                call    DivideB         ; BCD divide
+                ld      hl, lbcdTemp1
+                ld      de, ibcdResult  ; Operation result
+                call    IDbcdDEHL       ; Integer divide a C bytes long BCD in (DE) and (HL)
+                xor     a
+                ld      (DecPlaces1), a
+                jr      NumOP32
+; ---------------------------------------------------------------------------
+NumOP22:
+                cp      11
+                jr      nz, NumOP23
+                ld      hl, lbcdTemp1
+                ld      c, FLTLN        ; Size of a Float/BCD (14)
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jr      z, NumOP27
+                ld      hl, lbcdTemp2
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jr      z, NumOP27
+                jr      NumOP29
+; ---------------------------------------------------------------------------
+NumOP23:
+                cp      12
+                jr      nz, NumOP25
+                ld      hl, lbcdTemp1
+                ld      c, FLTLN        ; Size of a Float/BCD (14)
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jr      nz, NumOP29
+                ld      hl, lbcdTemp2
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jr      z, NumOP27
+                jr      NumOP29
+; ---------------------------------------------------------------------------
+NumOP24:
+                pop     af
+                jr      z, NumOP27
+                ld      a, (I6)
+NumOP25:
+                cp      13
+                jr      nz, NumOP26
+                ld      a, (Signal1)
+                or      a
+                jr      z, NumOP27
+                jr      NumOP29
+; ---------------------------------------------------------------------------
+NumOP26:
+                ld      a, (Signal1)
+                or      a
+                jr      z, NumOP29
+NumOP27:                                ; bit0:String
+                ld      a, (bmFlag1)    ; bit1:Not
+                                        ; bit2:Dirty
+                                        ; bit4:Break
+                and     NOTFL
+                jr      nz, NumOP30
+NumOP28:                                ; '0'
+                ld      a, 30h
+                jr      NumOP31
+; ---------------------------------------------------------------------------
+NumOP29:                                ; bit0:String
+                ld      a, (bmFlag1)    ; bit1:Not
+                                        ; bit2:Dirty
+                                        ; bit4:Break
+                and     NOTFL
+                jr      nz, NumOP28
+NumOP30:                                ; '1'
+                ld      a, 31h
+NumOP31:
+                call    SPush
+                ld      a, 1
+                call    SPush
+                ld      a, 3
+                call    SPush
+                ret
+; ---------------------------------------------------------------------------
+NumOP32:
+                ld      c, 9
+                call    Round           ; Round BCD in HL to MAXDG
+                call    BCDPush         ; Push BCD into the stack
+                ret
+; End of function NumOP
+;
+; BCDPack
+;       ON ENTRY:
+;          H,L AT MOST SIGNIFICANT BYTE OF STRING
+;          D,E AT MOST SIGNIFICANT BYTE OF OF BCD PLACE
+;          B   MAX NUMBER OF BYTES ALLOWED (14 FOR REAL, 5 FOR INTEGER)
+;          C   NUMBER OF BYTES IN STRING
+;
+;       ON EXIT:
+;         A  SIGN OF BCD NUMBER--0 IF POSITIVE, 1 IF NEGATIVE
+;         COUNT  NUMBER OF DECIMAL PLACES
+;
+; =============== S U B R O U T I N E =======================================
+; Packs a C long string in (HL) into BCD form
+BCDPack:
+                push    hl
+                push    de
+                ld      a, Minus        ; Check for negative
+                cp      (hl)
+                ld      a, 0            ; Assume >= 0
+                jr      nz, BCDPack1
+                inc     hl              ; Skip minux sign
+                dec     c
+                ld      a, 1            ; Set < 0
+BCDPack1:                               ; Save sign indicator
+                push    af
+                push    bc
+                ld      a, b
+                add     a, a
+                dec     a
+                cp      c
+                jp      c, Error02      ; Arithmetic overflow
+                ld      b, 0
+                ld      a, Point
+                cpir
+                ld      a, c
+                ld      (Count), a
+                add     hl, bc
+                dec     hl
+                ex      de, hl
+                pop     bc
+                push    bc
+                ld      c, b
+                call    pHLtoLbcd       ; Points HL to the last byte of C long BCD
+                pop     bc
+                push    bc
+BCDPack2:
+                ld      a, (de)
+                cp      Point
+                jr      z, BCDPack4
+                rrd
+BCDPack3:
+                dec     c
+                jr      z, BCDPack5
+                dec     de
+                ld      a, (de)
+                cp      Point
+                jr      z, BCDPack3
+                rrd
+                dec     hl
+                dec     b
+BCDPack4:
+                dec     de
+                dec     c
+                jp      nz, BCDPack2
+                jr      BCDPack6
+; ---------------------------------------------------------------------------
+BCDPack5:
+                xor     a
+                rrd
+                xor     a
+                jr      BCDPack8
+; ---------------------------------------------------------------------------
+BCDPack6:
+                ld      a, b
+                or      a
+                jr      z, BCDPackEnd
+                xor     a
+BCDPack7:
+                ld      (hl), a
+BCDPack8:
+                dec     hl
+                djnz    BCDPack7
+BCDPackEnd:
+                pop     bc
+                pop     af              ; Get sign back
+                pop     de
+                pop     hl
+                ret
+; End of function BCDPack
+; =============== S U B R O U T I N E =======================================
+; Points HL to the last byte of C long BCD
+pHLtoLbcd:
+                push    bc
+                ld      b, 0
+                add     hl, bc
+                dec     hl
+                pop     bc
+                ret
+; End of function pHLtoLbcd
+; =============== S U B R O U T I N E =======================================
+; Multiplies C bytes long BCD in (HL) by 2
+Mbcd2:
+                call    pHLtoLbcd       ; Points HL to the last byte of C long BCD
+                push    af
+                push    bc
+                xor     a
+Mbcd21:
+                ld      a, (hl)
+                adc     a, a
+                daa
+                ld      (hl), a
+                dec     hl
+                dec     c
+                jp      nz, Mbcd21
+                inc     hl
+                pop     bc
+                pop     af
+                ret
+; End of function Mbcd2
+; =============== S U B R O U T I N E =======================================
+; Divides C bytes long BCD in (HL) by 2
+Dbcd2:
+                push    bc
+                push    de
+                push    hl
+                xor     a
+                ld      b, c
+                ld      d, 160
+Dbcd21:
+                ld      a, (hl)
+                jr      nc, Dbcd22
+                add     a, d
+Dbcd22:
+                rra
+                bit     3, a
+                jr      z, Dbcd23
+                dec     a
+                dec     a
+                dec     a
+Dbcd23:
+                ld      (hl), a
+                inc     hl
+                djnz    Dbcd21
+                pop     hl
+                pop     de
+                pop     bc
+                ret
+; End of function Dbcd2
+; =============== S U B R O U T I N E =======================================
+; Adds two C bytes long BCDs in (DE) and (HL)
+; result goes in (HL)
+AbcdDEHL:
+                push    bc
+                push    af
+                call    pHLtoLbcd       ; Points HL to the last byte of C long BCD
+                ex      de, hl
+                call    pHLtoLbcd       ; Points HL to the last byte of C long BCD
+                xor     a
+AbcdDEHL1:
+                ld      a, (de)
+                adc     a, (hl)
+                daa
+                ld      (de), a
+                dec     hl
+                dec     de
+                dec     c
+                jp      nz, AbcdDEHL1
+                jp      c, Error02      ; Arithmetic overflow
+                ex      de, hl
+                inc     hl
+                inc     de
+                pop     af
+                pop     bc
+                ret
+; End of function AbcdDEHL
+; =============== S U B R O U T I N E =======================================
+; Subtracts two C bytes long BCDs in (DE) and (HL)
+; result goes in (HL)
+SbcdDEHL:
+                push    bc
+                push    af
+                call    pHLtoLbcd       ; Points HL to the last byte of C long BCD
+                ex      de, hl
+                call    pHLtoLbcd       ; Points HL to the last byte of C long BCD
+                ld      b, c
+                xor     a
+SbcdDEHL1:
+                ld      a, (de)
+                sbc     a, (hl)
+                daa
+                ld      (de), a
+                dec     hl
+                dec     de
+                djnz    SbcdDEHL1
+                jp      c, Error02      ; Arithmetic overflow
+                ex      de, hl
+                inc     hl
+                inc     de
+                pop     af
+                pop     bc
+                ret
+; End of function SbcdDEHL
+; =============== S U B R O U T I N E =======================================
+; Increments by 1 the C bytes long BCD in (HL)
+IbcdHL:
+                push    bc
+                push    af
+                push    hl
+                call    pHLtoLbcd       ; Points HL to the last byte of C long BCD
+                xor     a
+                ld      b, c
+                ld      c, a
+                scf
+IbcdHL1:
+                adc     a, (hl)
+                daa
+                ld      (hl), a
+                jr      nc, IbcdHL2
+                dec     hl
+                ld      a, c
+                djnz    IbcdHL1
+                jp      c, Error02      ; Arithmetic overflow
+IbcdHL2:
+                pop     hl
+                pop     af
+                pop     bc
+                ret
+; End of function IbcdHL
+; =============== S U B R O U T I N E =======================================
+; Decrements by 1 the C bytes long BCD in (HL)
+DbcdHL:
+                ld      a, (hl)
+                and     11110000b
+                jp      nz, IbcdHL      ; Increments by 1 the C bytes long BCD in (HL)
+                push    de
+                push    bc
+                push    af
+                push    hl
+                call    pHLtoLbcd       ; Points HL to the last byte of C long BCD
+                ld      e, 0
+                scf
+                ld      b, c
+DbcdHL1:
+                ld      a, (hl)
+                sbc     a, e
+                daa
+                ld      (hl), a
+                jr      nc, DbcdHL2
+                dec     hl
+                djnz    DbcdHL1
+DbcdHL2:
+                pop     hl
+                pop     af
+                pop     bc
+                pop     de
+                ret
+; End of function DbcdHL
+; =============== S U B R O U T I N E =======================================
+; Tests a C bytes long BCD in (HL) for zero
+lZtest:
+                push    hl
+                push    bc
+                xor     a
+                ld      b, a
+lZtest1:
+                cpi
+                jr      nz, lZtest2
+                jp      pe, lZtest1
+lZtest2:
+                pop     bc
+                pop     hl
+                ret
+; End of function lZtest
+; =============== S U B R O U T I N E =======================================
+; Integer divide a C bytes long BCD in (DE) and (HL)
+IDbcdDEHL:
+                push    af
+                push    de
+                push    hl
+                push    bc
+                call    pHLtoLbcd       ; Points HL to the last byte of C long BCD
+                ex      de, hl
+                call    pHLtoLbcd       ; Points HL to the last byte of C long BCD
+                or      a
+                ld      a, b
+                rra
+                push    af
+                push    de
+                ld      b, a
+                cpl
+                ld      e, a
+                ld      d, 255
+                inc     de
+                add     hl, de
+                ld      a, c
+                sub     b
+                ld      c, a
+                pop     de
+                push    de
+                ld      a, b
+                ld      b, 0
+                lddr
+                or      a
+                jr      z, IDbcdDEHL2
+                ld      b, a
+                xor     a
+IDbcdDEHL1:
+                ld      (de), a
+                dec     de
+                djnz    IDbcdDEHL1
+IDbcdDEHL2:
+                pop     hl
+                pop     af
+                jr      nc, IDbcdDEHL4
+                xor     a
+                pop     bc
+                push    bc
+                ld      b, a
+                sbc     hl, bc
+                inc     hl
+                ld      b, c
+IDbcdDEHL3:
+                rrd
+                inc     hl
+                djnz    IDbcdDEHL3
+IDbcdDEHL4:
+                pop     bc
+                pop     hl
+                pop     de
+                pop     af
+                ret
+; End of function IDbcdDEHL
+; =============== S U B R O U T I N E =======================================
+; Multiplies two C bytes long BCD in (DE) and (HL)
+; result goes in ibcdResult
+MbcdDEHL:
+                push    hl
+                ld      hl, ibcdResult  ; Operation result
+                call    zeroCHL         ; Fills C bytes in (HL) with 0x00
+                pop     hl
+                call    ZTest           ; Tests a bcd number for zero
+                ret     z
+                ex      af, af'         ; Saves AF on AF'
+                ex      de, hl
+                call    ZTest           ; Tests a bcd number for zero
+                ex      de, hl
+                ret     z
+                push    hl
+                push    de
+                push    bc
+                call    pHLtoLbcd       ; Points HL to the last byte of C long BCD
+                ex      de, hl
+                call    pHLtoLbcd       ; Points HL to the last byte of C long BCD
+                ex      de, hl
+                exx                     ; Saves a copy of the registers
+                pop     bc
+                push    bc
+                ld      hl, ibcdResult  ; Operation result
+                call    pHLtoLbcd       ; Points HL to the last byte of C long BCD
+                ld      e, a
+                ex      af, af'         ; Restores AF from AF'
+                ld      b, a
+                add     a, e
+                inc     a
+                sub     c
+                jr      c, MbcdHLDE1
+                sub     c
+                jp      nc, Error02     ; Arithmetic overflow
+MbcdHLDE1:
+                exx
+MbcdHLDE2:
+                xor     a
+                ex      af, af'
+                ld      a, (hl)
+                and     00001111b
+                push    hl
+                push    de
+                ld      h, MulTable     ; High byte of the multiplication table
+                ld      c, a
+                rrca
+                rrca
+                rrca
+                rrca
+                ld      b, a
+                exx
+                push    de
+                push    hl
+                exx
+MbcdHLDE3:
+                ld      a, (de)
+                and     00001111b
+                or      b
+                call    sub_8F89
+                jr      z, MbcdHLDE4
+                ex      af, af'
+                ld      a, (de)
+                and     11110000b
+                or      c
+                call    sub_8F9A
+                jr      z, MbcdHLDE5
+                ex      af, af'
+                dec     de
+                jr      MbcdHLDE3
+; ---------------------------------------------------------------------------
+MbcdHLDE4:
+                exx
+                dec     hl
+                exx
+MbcdHLDE5:
+                exx
+                ld      (hl), a
+                pop     hl
+                pop     de
+                dec     b
+                exx
+                pop     de
+                pop     hl
+                jp      z, MbcdHLDE9
+                xor     a
+                ex      af, af'
+                ld      a, (hl)
+                and     11110000b
+                push    hl
+                push    de
+                exx
+                push    de
+                push    hl
+                exx
+                ld      b, a
+                rrca
+                rrca
+                rrca
+                rrca
+                ld      c, a
+                ld      h, 4            ; (todo) Mult. table?
+MbcdHLDE6:
+                ld      a, (de)
+                and     00001111b
+                or      b
+                call    sub_8F9A
+                jr      z, MbcdHLDE8
+                ex      af, af'
+                ld      a, (de)
+                and     11110000b
+                or      c
+                call    sub_8F89
+                jr      z, MbcdHLDE7
+                ex      af, af'
+                dec     de
+                jp      MbcdHLDE6
+; ---------------------------------------------------------------------------
+MbcdHLDE7:
+                exx
+                dec     hl
+                exx
+MbcdHLDE8:
+                exx
+                ld      (hl), a
+                pop     hl
+                dec     hl
+                pop     de
+                dec     b
+                exx
+                pop     de
+                pop     hl
+                dec     hl
+                jp      nz, MbcdHLDE2
+MbcdHLDE9:
+                pop     bc
+                pop     de
+                pop     hl
+                ret
+; End of function MbcdDEHL
+; =============== S U B R O U T I N E =======================================
+sub_8F89:
+                ld      l, a
+                ex      af, af'
+                add     a, (hl)
+                daa
+                exx
+                add     a, (hl)
+                daa
+                ld      (hl), a
+                ld      a, 0
+                jr      nc, loc_8F97
+                ld      a, 10h
+loc_8F97:
+                dec     e
+                exx
+                ret
+; End of function sub_8F89
+; =============== S U B R O U T I N E =======================================
+sub_8F9A:
+                ld      l, a
+                ex      af, af'
+                add     a, (hl)
+                daa
+                exx
+                rrca
+                rrca
+                rrca
+                rrca
+                ld      c, a
+                and     00001111b
+                ld      d, a
+                ld      a, c
+                and     11110000b
+                add     a, (hl)
+                daa
+                ld      (hl), a
+                ld      a, 0
+                adc     a, d
+                dec     hl
+                dec     e
+                exx
+                ret
+; End of function sub_8F9A
+; =============== S U B R O U T I N E =======================================
+; BCD divide
+DivideB:
+                push    bc
+                push    hl
+                push    de
+                ld      (word_0504), hl
+                ex      de, hl
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jp      z, Error17      ; Division by zero
+                ex      de, hl
+                ld      hl, vW
+                call    CopyCDEHL       ; Copy C bytes from (DE) to (HL)
+                ld      hl, ibcdResult  ; Operation result
+                call    zeroCHL         ; Fills C bytes in (HL) with 0x00
+                ld      b, c
+DivideB2:
+                ld      de, vW
+                ld      hl, (word_0504)
+                ex      de, hl
+                call    SCmp            ; Compares two strings
+                jr      c, DivideB3
+                call    Mbcd2           ; Multiplies C bytes long BCD in (HL) by 2
+                jp      DivideB2
+; ---------------------------------------------------------------------------
+DivideB3:
+                pop     de
+                push    de
+                ld      hl, vW
+                call    SCmp            ; Compares two strings
+                jr      z, DivideB5
+                jr      nc, DivideB5
+                ld      hl, ibcdResult  ; Operation result
+                call    Mbcd2           ; Multiplies C bytes long BCD in (HL) by 2
+                ld      hl, vW
+                call    Dbcd2           ; Divides C bytes long BCD in (HL) by 2
+                ex      de, hl
+                ld      hl, (word_0504)
+                call    SCmp            ; Compares two strings
+                jr      z, DivideB4
+                jr      nc, DivideB3
+DivideB4:                               ; Subtracts two C bytes long BCDs in (DE) and (HL)
+                call    SbcdDEHL        ; result goes in (HL)
+                ld      hl, ibcdResult  ; Operation result
+                call    IbcdHL          ; Increments by 1 the C bytes long BCD in (HL)
+                jp      DivideB3
+; ---------------------------------------------------------------------------
+DivideB5:
+                pop     de
+                pop     hl
+                pop     bc
+                ret
+; End of function DivideB
+; =============== S U B R O U T I N E =======================================
+; Multiply a BCD by 10
+Times10:
+                push    af
+                push    bc
+                push    de
+                call    pHLtoLbcd       ; Points HL to the last byte of C long BCD
+                ld      b, c
+                xor     a
+Times102:
+                rld
+                dec     hl
+                djnz    Times102
+                or      a
+                jp      nz, Error02     ; Arithmetic overflow
+                inc     hl
+                pop     de
+                pop     bc
+                pop     af
+                ret
+; End of function Times10
+; =============== S U B R O U T I N E =======================================
+; Tests a bcd number for zero
+ZTest:
+                push    hl
+                push    bc
+                xor     a
+ZTest1:
+                or      (hl)
+                jr      nz, ZTest2
+                inc     hl
+                dec     c
+                jp      nz, ZTest1
+                jr      ZTest3
+; ---------------------------------------------------------------------------
+ZTest2:
+                sub     0Fh
+                sbc     a, a
+                add     a, c
+                add     a, c
+ZTest3:
+                or      a
+                pop     bc
+                pop     hl
+                ret
+; End of function ZTest
+; =============== S U B R O U T I N E =======================================
+; BCD divide with a fractional remainder
+Divide:
+                push    hl
+                push    de
+                push    hl
+                ld      hl, byte_9F23
+                call    zeroCHL         ; Fills C bytes in (HL) with 0x00
+                pop     hl
+Divide2:
+                pop     de
+                push    de
+                call    DivideB         ; BCD divide
+                push    hl
+                ld      hl, byte_9F23
+                call    Times10         ; Multiply a BCD by 10
+                ld      de, ibcdResult  ; Operation result
+                call    AbcdDEHL        ; Adds two C bytes long BCDs in (DE) and (HL)
+                                        ; result goes in (HL)
+                call    ZTest           ; Tests a bcd number for zero
+                pop     hl
+                cp      10
+                jr      nc, Divide3
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jr      z, Divide3
+                call    Times10         ; Multiply a BCD by 10
+                inc     b
+                jp      Divide2
+; ---------------------------------------------------------------------------
+Divide3:
+                pop     de
+                pop     hl
+                ret
+; End of function Divide
+; =============== S U B R O U T I N E =======================================
+; Fills C bytes in (HL) with 0x00
+zeroCHL:
+                push    hl
+                push    bc
+                xor     a
+zeroCHL1:
+                ld      (hl), a
+                inc     hl
+                dec     c
+                jp      nz, zeroCHL1
+                pop     bc
+                pop     hl
+                ret
+; End of function zeroCHL
+; =============== S U B R O U T I N E =======================================
+; Copy C bytes from (DE) to (HL)
+CopyCDEHL:
+                push    hl
+                push    de
+                push    bc
+                push    af
+                ex      de, hl
+                ld      b, 0
+                ldir
+                pop     af
+                pop     bc
+                pop     de
+                pop     hl
+                ret
+; End of function CopyCDEHL
+; =============== S U B R O U T I N E =======================================
+; Round BCD in HL to MAXDG
+Round:
+                push    hl
+                ld      b, FLTLN        ; Size of a Float/BCD (14)
+Round2:
+                ld      a, (hl)
+                or      a
+                jr      nz, Round3
+                inc     hl
+                djnz    Round2
+                ld      bc, 0
+                pop     hl
+                jp      Round24
+; ---------------------------------------------------------------------------
+Round3:
+                ld      a, b
+                add     a, a
+                ld      b, a
+                ld      a, (hl)
+                and     11110000b
+                jr      nz, Round4
+                dec     b
+Round4:
+                ld      a, (DollarJ)
+                or      a
+                jr      z, Round5
+                ld      a, (DecPlaces1)
+                cp      b
+                jr      c, Round5
+                pop     hl
+                push    hl
+                push    bc
+                ld      c, a
+                ld      a, FLTLN*2
+                sub     c
+                rra
+                push    af
+                ld      c, a
+                ld      b, 0
+                add     hl, bc
+                pop     af
+                pop     bc
+                ld      a, (DecPlaces1)
+                ld      b, a
+                ld      d, 0
+                jr      c, Round6
+                ld      d, 1
+                jr      Round7
+; ---------------------------------------------------------------------------
+Round5:
+                ld      a, (hl)
+                and     11110000b
+                ld      a, b
+                ld      d, 0
+                jr      nz, Round7
+Round6:
+                ld      a, c
+                or      a
+                ld      a, d
+                push    bc
+                jr      z, Round9
+                pop     bc
+                dec     c
+                ld      a, b
+                dec     a
+                ld      d, 1
+                inc     hl
+Round7:
+                push    bc
+                sub     c
+                ld      b, a
+                jr      c, Round17
+                jr      z, Round17
+                ld      a, c
+                or      a
+                ld      a, d
+                jr      z, Round9
+Round8:
+                xor     a
+                dec     c
+                jr      z, Round9
+                ld      a, 1
+                inc     hl
+                dec     c
+                jr      nz, Round8
+Round9:
+                push    hl
+                push    af
+                or      a
+                jr      z, Round10
+                ld      d, 80
+                jr      Round11
+; ---------------------------------------------------------------------------
+Round10:
+                ld      d, 5
+Round11:
+                ld      a, (hl)
+                add     a, d
+                daa
+                ld      (hl), a
+                jr      nc, Round13
+Round12:
+                dec     hl
+                ld      a, (hl)
+                adc     a, 0
+                daa
+                ld      (hl), a
+                jp      c, Round12
+Round13:
+                pop     af
+                pop     hl
+                or      a
+                jr      nz, Round14
+                ld      a, (hl)
+                and     11110000b
+                ld      (hl), a
+                inc     hl
+                dec     b
+Round14:
+                srl     b
+                jr      z, Round16
+                xor     a
+Round15:
+                ld      (hl), a
+                inc     hl
+                djnz    Round15
+Round16:
+                pop     bc
+                pop     hl
+                ld      c, FLTLN        ; Size of a Float/BCD (14)
+                call    ZTest           ; Tests a bcd number for zero
+                ld      b, a
+                jr      Round18
+; ---------------------------------------------------------------------------
+Round17:
+                pop     bc
+                pop     hl
+Round18:                                ; Size of a Float/BCD (14)
+                ld      de, FLTLN
+                add     hl, de
+                dec     hl
+                ld      d, 1
+                ld      a, (DecPlaces1)
+                ld      c, a
+                or      a
+                jr      z, Round21
+                ld      a, b
+                or      a
+                jr      nz, Round19
+                ld      c, b
+                jr      Round21
+; ---------------------------------------------------------------------------
+Round19:
+                ld      a, (hl)
+                and     00001111b
+                jr      nz, Round21
+                dec     b
+                dec     c
+                ld      d, 0
+                jr      z, Round21
+                ld      a, (hl)
+                and     11110000b
+                jr      nz, Round21
+                dec     b
+                dec     c
+                ld      d, 1
+                jr      z, Round20
+                dec     hl
+                jp      Round19
+; ---------------------------------------------------------------------------
+Round20:
+                dec     hl
+Round21:
+                ld      a, b
+                sub     c
+                jr      nc, Round22
+                xor     a
+Round22:
+                ld      b, a
+                ld      a, c
+                add     a, b
+                rra
+                ld      e, 1
+                jr      nc, Round23
+                dec     e
+Round23:
+                push    de
+                cpl
+                ld      e, a
+                ld      d, 255
+                inc     de
+                add     hl, de
+                pop     de
+                ld      a, e
+                and     d
+                jr      z, Round24
+                inc     hl
+Round24:
+                ld      a, e
+                xor     d
+                ret
+; End of function Round
+; =============== S U B R O U T I N E =======================================
+; Push BCD into the stack
+BCDPush:
+                push    bc
+                ld      e, a
+                ld      a, c
+                or      b
+                jr      nz, BCDPush1
+                ld      a, 30h          ; '0'
+                call    SPush
+                ld      d, 1
+                jr      BCDPush9
+; ---------------------------------------------------------------------------
+BCDPush1:
+                ld      d, 0
+                ld      a, (Signal1)
+                or      a
+                jr      z, BCDPush2
+                ld      a, Minus
+                call    SPush
+                inc     d
+BCDPush2:                               ; See if a $J
+                ld      a, (DollarJ)
+                or      a
+                jr      z, BCDPush3
+                ld      a, b
+                or      a
+                jr      nz, BCDPush4
+                ld      a, 30h          ; '0'
+                call    SPush
+                inc     d
+                jr      BCDPush8
+; ---------------------------------------------------------------------------
+BCDPush3:
+                ld      a, b
+                or      a
+                jr      z, BCDPush8
+BCDPush4:
+                ld      a, e
+                or      a
+                jr      nz, BCDPush6
+BCDPush5:
+                ld      a, (hl)
+                and     11110000b
+                rra
+                rra
+                rra
+                rra
+                or      30h             ; '0'
+                inc     d
+                call    SPush
+                dec     b
+                jr      z, BCDPush7
+BCDPush6:
+                ld      a, (hl)
+                and     00001111b
+                or      30h             ; '0'
+                inc     d
+                call    SPush
+                inc     hl
+                djnz    BCDPush5
+                ld      e, 0
+                jr      BCDPush8
+; ---------------------------------------------------------------------------
+BCDPush7:
+                ld      e, 1
+BCDPush8:
+                ld      a, c
+                or      a
+                jr      z, BCDPush9
+                ld      a, Point
+                call    SPush
+                inc     d
+                ld      b, c
+                ld      c, 0
+                jr      BCDPush3
+; ---------------------------------------------------------------------------
+BCDPush9:
+                pop     bc
+                ld      a, (DollarJ)
+                or      a
+                jr      z, BCDPush11
+                ld      a, (I6)
+                sub     c
+                ld      b, a
+                jr      z, BCDPush11
+                ld      a, c
+                or      a
+                jr      nz, BCDPush10
+                ld      a, Point
+                call    SPush
+                inc     d
+BCDPush10:                              ; '0'
+                ld      a, 30h
+                call    SPush
+                inc     d
+                djnz    BCDPush10
+BCDPush11:
+                ld      a, d
+                call    SPush
+                ld      a, 3
+                call    SPush
+                ret
+; End of function BCDPush
+; =============== S U B R O U T I N E =======================================
+SPush:
+                ld      (ix+0), a
+                inc     ix
+                ret
+; End of function SPush
+; =============== S U B R O U T I N E =======================================
+; Outputs a CrLf
+putCrLf:
+                ld      a, 0Dh
+                call    putChar         ; Outputs the character on A to the console
+                ld      a, 0Ah
+                call    putChar         ; Outputs the character on A to the console
+                ret
+; End of function putCrLf
+; =============== S U B R O U T I N E =======================================
+; Outputs a Mumps string (1st byte is the size) in (HL)
+putMStr:
+                ld      a, (hl)         ; Gets string size from (HL)
+                or      a
+                ret     z               ; Nothing to print
+                ld      c, a
+                inc     hl
+putMstr1:
+                ld      a, (hl)
+                call    putChar         ; Outputs the character on A to the console
+                inc     hl
+                dec     c
+                jr      nz, putMstr1
+                ret
+; End of function putMStr
+; =============== S U B R O U T I N E =======================================
+; Places an asterisk under the error position
+putAsterisk:
+                ld      hl, (Index)
+                ld      de, (pStkStart)
+                or      a
+                sbc     hl, de
+                ret     c
+                ld      a, h
+                or      a
+                ret     nz
+                ld      b, l
+                ld      l, e
+                ld      h, d
+                ld      c, 0
+putAsterisk1:
+                ld      a, (hl)
+                cp      CR              ; Look for CR
+                jr      z, putAsterisk2
+                inc     hl
+                inc     c
+                jr      putAsterisk1
+; ---------------------------------------------------------------------------
+putAsterisk2:
+                ld      a, c
+                cp      71
+                jr      c, putAsterisk6
+                ld      a, b
+                cp      36
+                jr      c, putAsterisk5
+                ld      a, c
+                sub     b
+                cp      36
+                jr      c, putAsterisk3
+                ld      a, b
+                sub     36
+                ld      b, 36
+                jr      putAsterisk4
+; ---------------------------------------------------------------------------
+putAsterisk3:
+                ld      b, a
+                ld      a, 70
+                sub     b
+                ld      b, a
+                ld      a, c
+                sub     70
+putAsterisk4:
+                add     a, e
+                ld      e, a
+                ld      a, d
+                adc     a, 0
+                ld      d, a
+putAsterisk5:
+                ld      c, 70
+putAsterisk6:                           ; Outputs a CrLf
+                call    putCrLf
+putAsterisk7:                           ; Check the original char
+                ld      a, (de)
+                cp      TAB             ; Was it TAB?
+                jr      nz, putAsterisk8
+                ld      a, Blank        ; Space
+putAsterisk8:                           ; Outputs the character on A to the console
+                call    putChar
+                inc     de
+                dec     c
+                jr      nz, putAsterisk7
+                call    putCrLf         ; Outputs a CrLf
+                ld      a, b
+                or      a
+                jr      z, putAsteriskE
+putAsterisk9:                           ; Space
+                ld      a, Blank
+                call    putChar         ; Outputs the character on A to the console
+                dec     b
+                jr      nz, putAsterisk9
+putAsteriskE:
+                ld      a, Asterisk
+                call    putChar         ; Outputs the character on A to the console
+                call    putCrLf         ; Outputs a CrLf
+                ret
+; End of function putAsterisk
+; =============== S U B R O U T I N E =======================================
+putErrLine:
+                ld      hl, errLabel    ; Label where the error ocurred
+                call    putMStr         ; Outputs a Mumps string (1st byte is the size) in (HL)
+                ld      hl, errIndex    ; Offset from the label where the error ocurred
+                ld      c, 5
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jr      z, putErrLine1
+                ld      a, Plus
+                call    putChar         ; Outputs the character on A to the console
+                call    BCD5ToStr       ; Convert BCD5 in (HL) to string and push it
+                ld      hl, errIndStr   ; Error index in MStr format
+                call    pullNumber      ; Pulls a number in MStr format from the stack into (HL)
+                ld      hl, errIndStr   ; Error index in MStr format
+                call    putMStr         ; Outputs a Mumps string (1st byte is the size) in (HL)
+putErrLine1:
+                ld      a, Carat
+                call    putChar         ; Outputs the character on A to the console
+                ld      hl, (pRtnName)  ; Pointer to the current routine name
+                call    putMStr         ; Outputs a Mumps string (1st byte is the size) in (HL)
+                call    putCrLf         ; Outputs a CrLf
+                ret
+; End of function putErrLine
+; =============== S U B R O U T I N E =======================================
+putBackSP:
+                ld      a, BS
+                call    putChar         ; Outputs the character on A to the console
+                ld      a, Blank        ; Space
+                call    putChar         ; Outputs the character on A to the console
+                ld      a, BS
+                call    putChar         ; Outputs the character on A to the console
+                ret
+; End of function putBackSP
+; =============== S U B R O U T I N E =======================================
+sub_92E1:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ld      de, 0
+                ex      de, hl
+                ld      b, 5
+loc_92EC:
+                ld      a, (de)
+                ld      c, 1
+                and     11110000b
+                rrca
+                rrca
+                rrca
+                rrca
+loc_92F5:
+                push    bc
+                push    hl
+                add     hl, hl
+                jr      c, loc_931B
+                add     hl, hl
+                jr      c, loc_931B
+                pop     bc
+                add     hl, bc
+                jr      c, loc_931B
+                add     hl, hl
+                jr      c, loc_931B
+                add     a, l
+                ld      l, a
+                ld      a, 0
+                adc     a, h
+                ld      h, a
+                pop     bc
+                ld      a, c
+                or      a
+                jr      z, loc_9316
+                ld      a, (de)
+                and     00001111b
+                ld      c, 0
+                jr      loc_92F5
+; ---------------------------------------------------------------------------
+loc_9316:
+                inc     de
+                dec     b
+                jr      nz, loc_92EC
+                ret
+; ---------------------------------------------------------------------------
+loc_931B:
+                ld      a, 0
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; End of function sub_92E1
+; =============== S U B R O U T I N E =======================================
+sub_9321:
+                ld      hl, (pIndex)
+                call    sub_942A
+                ld      b, 0
+                ld      a, c
+                call    sub_934F
+                ld      a, d
+                call    sub_934B
+                ld      a, d
+                call    sub_934F
+                ld      a, e
+                call    sub_934B
+                ld      a, e
+                and     00001111b
+                call    sub_9355
+                ld      (ix+0), b
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                ret
+; End of function sub_9321
+; =============== S U B R O U T I N E =======================================
+sub_934B:
+                rrca
+                rrca
+                rrca
+                rrca
+; End of function sub_934B
+; =============== S U B R O U T I N E =======================================
+sub_934F:
+                and     00001111b
+                ld      c, a
+                or      b
+                ret     z
+                ld      a, c
+; End of function sub_934F
+; =============== S U B R O U T I N E =======================================
+sub_9355:
+                or      30h             ; '0'
+                call    SPush
+                inc     b
+                ret
+; End of function sub_9355
+; =============== S U B R O U T I N E =======================================
+sub_935C:
+                ld      a, (ix-2)
+                ld      c, a
+                cpl
+                ld      e, a
+                ld      d, 255
+                dec     de
+                add     ix, de
+                push    ix
+                pop     hl
+                ld      de, lbcdTemp1
+                ld      b, 0Eh
+                call    BCDPack         ; Packs a C long string in (HL) into BCD form
+                ld      (Signal1), a
+                ld      a, (Count)
+                ld      (DecPlaces1), a
+                ld      b, a
+                ex      de, hl
+                ld      c, 0Eh
+                call    ZTest           ; Tests a bcd number for zero
+                sub     b
+                jr      nc, loc_9386
+                xor     a
+loc_9386:
+                ld      d, a
+                ld      a, (I6)
+                cp      b
+                jr      c, loc_938E
+                ld      a, b
+loc_938E:
+                add     a, d
+                cp      9
+                jr      c, loc_9395
+                ld      a, 9
+loc_9395:
+                ld      c, a
+                call    Round           ; Round BCD in HL to MAXDG
+                call    BCDPush         ; Push BCD into the stack
+                ret
+; End of function sub_935C
+; =============== S U B R O U T I N E =======================================
+; Makes a random number and pushes onto the stack
+MakeRandom:
+                ld      hl, lbcdTemp1
+                ld      de, lbcdRandom
+                ld      c, 14           ; Number of bytes to copy
+                call    CopyCDEHL       ; Copy C bytes from (DE) to (HL)
+                ld      hl, lbcdTemp2
+                ld      de, lbcdRandomL
+                call    CopyCDEHL       ; Copy C bytes from (DE) to (HL)
+                ld      de, lbcdTemp1
+                call    MbcdDEHL        ; Multiplies two C bytes long BCD in (DE) and (HL)
+                                        ; result goes in ibcdResult
+                ex      de, hl
+                ld      c, 9
+                call    zeroCHL         ; Fills C bytes in (HL) with 0x00
+                ld      hl,  lbcdRandom+8
+                ld      de, byte_9F0F
+                ld      c, 6
+                call    CopyCDEHL       ; Copy C bytes from (DE) to (HL)
+                ld      hl,  lbcdTemp1+9
+                ld      de, ibcdTemp0
+                ld      c, 5
+                call    CopyCDEHL       ; Copy C bytes from (DE) to (HL)
+                ld      hl, lbcdTemp2
+                ld      de, lbcdRandom
+                ld      c, 14
+                call    CopyCDEHL       ; Copy C bytes from (DE) to (HL)
+                ld      de, lbcdTemp1
+                call    MbcdDEHL        ; Multiplies two C bytes long BCD in (DE) and (HL)
+                                        ; result goes in ibcdResult
+                ld      hl, ibcdResult  ; Operation result
+                call    ZTest           ; Tests a bcd number for zero
+                ld      b, a
+                ld      a, 1Ch
+                sub     b
+                rra
+                push    af
+                ld      e, a
+                ld      d, 0
+                add     hl, de
+                ld      a, b
+                sub     12
+                jr      nc, MakeRandom2
+                xor     a
+MakeRandom2:
+                ld      b, a
+                ld      c, 0
+                pop     af
+                ld      a, 0
+                jr      nc, MakeRandom3
+                inc     a
+MakeRandom3:                            ; Push BCD into the stack
+                call    BCDPush
+                ret
+; End of function MakeRandom
+; =============== S U B R O U T I N E =======================================
+; Waste time for the Hang command
+WasteTime:
+                ld      de, ibcdTemp0
+                ld      hl, ibcdV8000
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+                ld      hl, ibcdTemp0
+                ld      c, 5
+WasteTime1:                             ; Decrements by 1 the C bytes long BCD in (HL)
+                call    DbcdHL
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jr      nz, WasteTime1
+                ld      hl, HangTime
+                call    DbcdHL          ; Decrements by 1 the C bytes long BCD in (HL)
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jr      nz, WasteTime   ; Waste time for the Hang command
+                ret
+; End of function WasteTime
+; =============== S U B R O U T I N E =======================================
+; Returns nothing as this is CP/M
+GetCurTime:
+                ret
+; End of function GetCurTime
+; =============== S U B R O U T I N E =======================================
+sub_942A:
+                ld      de, 0
+                ld      c, d
+                ld      b, 10h
+loc_9430:
+                sla     l
+                rl      h
+                ld      a, e
+                adc     a, e
+                daa
+                ld      e, a
+                ld      a, d
+                adc     a, d
+                daa
+                ld      d, a
+                ld      a, c
+                adc     a, c
+                daa
+                ld      c, a
+                djnz    loc_9430
+                ret
+; End of function sub_942A
+; =============== S U B R O U T I N E =======================================
+; Terminate execution
+GameOver:
+                jp      BOOT
+; End of function GameOver
+; =============== S U B R O U T I N E =======================================
+sub_9446:
+                ld      a, (byte_04FD)
+                or      a
+                jr      z, loc_9455
+                ld      de, ibcdTemp0
+                ld      hl, ibcdV2700
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+loc_9455:
+                call    sub_945E
+                ld      (tmpChar1), a
+                jp      loc_94C3
+; End of function sub_9446
+; =============== S U B R O U T I N E =======================================
+sub_945E:
+                push    bc
+                push    de
+                push    hl
+loc_9461:                               ; Check reader device availability
+                call    InPort6
+                jr      z, loc_946F
+                in      a, (4)
+                and     01111111b
+                sub     l
+                pop     hl
+loc_946C:
+                pop     de
+                pop     bc
+                ret
+; ---------------------------------------------------------------------------
+loc_946F:                               ; GetChar if A!=0x00 (BIOS call)
+                call    BGetChar2
+                ld      a, (byte_04FD)
+                or      a
+                jr      z, loc_9461
+                ld      hl, ibcdTemp0
+                ld      c, 5
+                call    DbcdHL          ; Decrements by 1 the C bytes long BCD in (HL)
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jr      nz, loc_9461
+                ld      de, ibcdTemp0
+                ld      hl, ibcdV2700
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+                ld      hl, HangTime
+                ld      c, 5
+                call    DbcdHL          ; Decrements by 1 the C bytes long BCD in (HL)
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jr      nz, loc_9461
+                xor     a
+                ld      (IfSW), a
+                pop     hl
+                ld      (hl), 0Dh
+                inc     hl
+                ld      a, 0Ah
+                jr      loc_946C
+; End of function sub_945E
+; =============== S U B R O U T I N E =======================================
+sub_94A7:
+                ld      a, (byte_04FD)
+                or      a
+                jr      z, loc_94B6
+                ld      hl, ibcdV2700
+                ld      de, ibcdTemp0
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+loc_94B6:
+                ld      hl, UBuffer1
+                ld      c, 0
+loc_94BB:
+                call    sub_945E
+                cp      0Ah
+                jr      nz, loc_94D3
+                ld      (hl), a
+loc_94C3:
+                xor     a
+                ld      (Wait), a
+                ld      (Time), a
+                ld      (byte_04FD), a
+                ld      a, c
+                dec     a
+                ld      (CmdLineSz), a  ; Size of the command line
+                ret
+; ---------------------------------------------------------------------------
+loc_94D3:
+                inc     c
+                ld      (hl), a
+                ld      a, 255
+                cp      c
+                jr      z, loc_94C3
+                ld      a, (BytesToRead)
+                cp      c
+                jr      z, loc_94C3
+                inc     hl
+                jr      loc_94BB
+; End of function sub_94A7
+; =============== S U B R O U T I N E =======================================
+; Writes a character to the AUX device
+AuxOut:
+                ld      a, (tmpChar1)
+                ld      e, a
+                ld      c, PunchOut     ; BDOS call 4
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+                ret
+; End of function AuxOut
+; =============== S U B R O U T I N E =======================================
+; Check reader device availability
+InPort6:
+                in      a, (6)
+                and     00000001b
+                ret
+; End of function InPort6
+; ---------------------------------------------------------------------------
+s0x15           db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+; =============== S U B R O U T I N E =======================================
+; Check for room on the syntax stack
+SSChk:
+                exx
+                push    ix
+                pop     de
+                ld      hl, (pSymStack) ; Symbol stack
+                or      a
+                dec     hl
+                sbc     hl, de
+                jp      nc, Error01     ; Stack overflow
+                ld      hl, 30
+                add     hl, de
+                jp      c, Error01      ; Stack overflow
+                sbc     hl, sp
+                jp      p, Error01      ; Stack overflow
+                exx
+                ret
+; End of function SSChk
+; =============== S U B R O U T I N E =======================================
+BIOScall:
+                push    ix
+                call    BIOSjmp
+                pop     ix
+                ret
+; End of function BIOScall
+; =============== S U B R O U T I N E =======================================
+BIOSjmp:
+                ld      e, l
+                ld      d, 0
+                ld      hl, (BOOT+1)    ; Loads BIOS jump point
+                add     hl, de          ; Offsets with DE (was 0L)
+                jp      (hl)            ; Jumps to CP/M BIOS
+; End of function BIOSjmp
+; =============== S U B R O U T I N E =======================================
+; Makes a call to the CP/M BDOS
+BDOScall:
+                push    ix
+                call    BDOS
+                pop     ix
+                ret
+; End of function BDOScall
+; =============== S U B R O U T I N E =======================================
+sub_9535:
+                push    bc
+                push    af
+                ld      bc, 4
+                add     hl, bc
+                call    sub_954B
+                ld      (hl), a
+                dec     hl
+                ld      (hl), c
+                ld      b, 3
+                xor     a
+loc_9544:
+                dec     hl
+                ld      (hl), a
+                djnz    loc_9544
+                pop     af
+                pop     bc
+                ret
+; End of function sub_9535
+; =============== S U B R O U T I N E =======================================
+sub_954B:
+                ld      c, a
+                ld      b, 8
+                xor     a
+loc_954F:
+                rl      c
+                adc     a, a
+                daa
+                djnz    loc_954F
+                rl      c
+                ret
+; End of function sub_954B
+; =============== S U B R O U T I N E =======================================
+sub_9558:
+                ld      b, (hl)
+                inc     hl
+                ld      a, (de)
+                ld      c, a
+                inc     de
+                call    SCmpB           ; Compares two strings in (DE) and (HL)
+                ld      a, 1
+                jr      z, loc_9567
+                jr      nc, locret_9568
+                inc     a
+loc_9567:
+                inc     a
+locret_9568:
+                ret
+; End of function sub_9558
+; =============== S U B R O U T I N E =======================================
+; Convert char in A to string and push it
+CharToStr:
+                push    de
+                push    bc
+                push    af
+                call    sub_954B
+                ld      d, a
+                ld      a, c
+                or      a
+                ld      c, 30h          ; '0'
+                call    nz, CharToStr2
+                ld      a, d
+                and     11110000b
+                or      b
+                rrca
+                rrca
+                rrca
+                rrca
+                call    nz, CharToStr2
+                ld      a, d
+                and     00001111b
+                call    CharToStr2
+                ld      (ix+0), b
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                pop     af
+                pop     bc
+                pop     de
+                ret
+; End of function CharToStr
+; =============== S U B R O U T I N E =======================================
+CharToStr2:
+                or      c
+                ld      (ix+0), a
+                inc     ix
+                inc     b
+                ret
+; End of function CharToStr2
+; =============== S U B R O U T I N E =======================================
+; Fills A bytes in (hl) with B
+FillHLB:
+                or      a
+FillHLB1:
+                ret     z
+                ld      (hl), b
+                inc     hl
+                dec     a
+                jr      FillHLB1
+; End of function FillHLB
+; =============== S U B R O U T I N E =======================================
+sub_95A6:
+                ld      c, a
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ld      a, c
+                or      a
+                jr      z, locret_95D4
+                ld      a, b
+                or      b
+                jr      z, loc_95DD
+                push    bc
+                ld      a, c
+                cp      1
+                jp      z, loc_95E2
+loc_95BB:
+                ld      a, b
+                sub     c
+                jr      c, loc_95DC
+                push    hl
+                push    de
+                push    bc
+loc_95C2:
+                ld      a, (de)
+                cp      (hl)
+                jr      nz, loc_95D5
+                inc     hl
+                inc     de
+                dec     b
+                dec     c
+                jr      nz, loc_95C2
+                ld      a, b
+                pop     bc
+                pop     de
+                pop     bc
+loc_95D0:
+                pop     bc
+                cpl
+                add     a, b
+                inc     a
+locret_95D4:
+                ret
+; ---------------------------------------------------------------------------
+loc_95D5:
+                pop     bc
+                dec     b
+                pop     de
+                pop     hl
+                inc     hl
+                jr      loc_95BB
+; ---------------------------------------------------------------------------
+loc_95DC:
+                pop     bc
+loc_95DD:
+                xor     a
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; ---------------------------------------------------------------------------
+loc_95E2:
+                ld      a, (de)
+                ld      c, a
+loc_95E4:
+                ld      a, (hl)
+                cp      c
+                jr      z, loc_95EE
+                inc     hl
+                dec     b
+                jr      nz, loc_95E4
+                jr      loc_95DC
+; ---------------------------------------------------------------------------
+loc_95EE:
+                inc     hl
+                dec     b
+                ld      a, b
+                jr      loc_95D0
+; End of function sub_95A6
+; =============== S U B R O U T I N E =======================================
+; Converts BCD5 in (HL) into char in A
+BCD5ToChar:
+                push    hl
+                push    de
+                push    bc
+                ld      a, 0
+                ld      (Result), a     ; Holds the result of called function
+                ld      de, ibcdV255
+                ld      bc,  word_0504+1
+                call    SCmp            ; Compares two strings
+                jr      c, BCD5ToCharEnd
+                ld      bc, 3
+                add     hl, bc
+                ld      a, (hl)
+                dec     a
+                ld      a, 0
+                jp      m, BCD5ToChar2
+                jr      z, BCD5ToChar1
+                ld      a, 100
+BCD5ToChar1:
+                add     a, 100
+BCD5ToChar2:
+                ld      b, a
+                inc     hl
+                ld      a, (hl)
+                and     11110000b
+                rrca
+                ld      c, a
+                rrca
+                rrca
+                add     a, c
+                ld      c, a
+                ld      a, (hl)
+                and     00001111b
+                add     a, c
+                add     a, b
+                ld      hl, Result      ; Holds the result of called function
+                ld      (hl), 1
+BCD5ToCharEnd:
+                pop     bc
+                pop     de
+                pop     hl
+                ret
+; End of function BCD5ToChar
+; =============== S U B R O U T I N E =======================================
+; Convert BCD5 in (HL) to string and push it
+BCD5ToStr:
+                push    hl
+                push    de
+                push    bc
+                ld      b, INTLN        ; Size of an Integer (5)
+                xor     a
+                ld      (Signal1), a
+                ld      a, (hl)
+                and     11110000b
+                jr      z, BCD5ToStr1
+                ld      a, 1
+                ld      (Signal1), a
+                ld      a, (hl)
+                and     00001111b
+                jr      BCD5ToStr2
+; ---------------------------------------------------------------------------
+BCD5ToStr1:
+                ld      a, (hl)
+                or      a
+BCD5ToStr2:
+                jr      nz, BCD5ToStr3
+                inc     hl
+                djnz    BCD5ToStr1
+                ld      bc, 0
+                jr      BCD5ToStr4
+; ---------------------------------------------------------------------------
+BCD5ToStr3:
+                ld      a, b
+                add     a, a
+                ld      b, a
+                ld      c, 0
+                ld      a, (hl)
+                and     11110000b
+                ld      a, 0
+                jr      nz, BCD5ToStr4
+                inc     a
+                dec     b
+BCD5ToStr4:                             ; Push BCD into the stack
+                call    BCDPush
+                pop     bc
+                pop     de
+                pop     hl
+                ret
+; End of function BCD5ToStr
+; =============== S U B R O U T I N E =======================================
+; Compare two 3 bytes values in (DE) and (HL)
+cp3BVal:
+                ld      c, 3
+cp3BVal1:
+                ld      a, (de)
+                cp      (hl)
+                ret     nz
+                inc     hl
+                inc     de
+                dec     c
+                jp      nz, cp3BVal1
+                ret
+; End of function cp3BVal
+; =============== S U B R O U T I N E =======================================
+; No references to here - seems to subtract DE from HL
+NoRef01:
+                ld      a, l
+                sub     e
+                ld      l, a
+                ld      a, h
+                sbc     a, d
+                or      l
+                ret
+; End of function NoRef01
+; =============== S U B R O U T I N E =======================================
+; Compare two M Strings in (DE) and (HL)
+cpMString:
+                ld      c, (hl)
+                ld      a, (de)
+                cp      c
+                ret     nz
+                inc     hl
+                inc     de
+; End of function cpMString
+; =============== S U B R O U T I N E =======================================
+; Compare C bytes long strings in (DE) and (HL)
+cpCStr:
+                ld      a, c
+                or      a
+                ret     z
+cpCstr1:
+                ld      a, (de)
+                cp      (hl)
+                ret     nz
+                inc     hl
+                inc     de
+                dec     c
+                jp      nz, cpCstr1
+                ret
+; End of function cpCStr
+; =============== S U B R O U T I N E =======================================
+sub_968F:
+                push    bc
+                push    hl
+                add     hl, bc
+                inc     hl
+                inc     hl
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                dec     hl
+                dec     hl
+                dec     hl
+                ex      de, hl
+                add     hl, bc
+                ld      a, (hl)
+                ld      c, a
+                ld      (de), a
+                inc     hl
+                inc     de
+                ld      a, (hl)
+                ld      b, a
+                ld      (de), a
+                pop     de
+                ld      (hl), d
+                dec     hl
+                ld      (hl), e
+                ld      h, b
+                ld      l, c
+                pop     bc
+                add     hl, bc
+                inc     hl
+                inc     hl
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ret
+; End of function sub_968F
+; =============== S U B R O U T I N E =======================================
+; Write a character to the printer device
+PrtOut:
+                ld      e, a
+                ld      c, PrintOut     ; BDOS call 5
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+                ret
+; End of function PrtOut
+; =============== S U B R O U T I N E =======================================
+sub_96B9:
+                inc     hl
+                inc     hl
+                ld      c, (hl)
+                inc     c
+                inc     a
+                jr      loc_96C3
+; End of function sub_96B9
+; =============== S U B R O U T I N E =======================================
+sub_96C0:
+                inc     hl
+                inc     hl
+                ld      c, (hl)
+loc_96C3:
+                inc     hl
+                ld      b, a
+loc_96C5:
+                ld      a, c
+                or      b
+                jr      z, loc_9704
+                ld      a, c
+                or      a
+                jr      z, loc_9703
+                ld      a, b
+                or      a
+                jr      z, loc_9705
+                push    bc
+                ld      a, (de)
+                ld      b, a
+                ld      c, (hl)
+                push    hl
+                inc     hl
+                inc     de
+loc_96D8:
+                ld      a, c
+                or      a
+                jr      nz, loc_96E1
+                or      b
+                jr      z, loc_96EF
+                jr      loc_96FD
+; ---------------------------------------------------------------------------
+loc_96E1:
+                ld      a, b
+                or      a
+                jr      z, loc_96FD
+                ld      a, (de)
+                cp      (hl)
+                jr      nz, loc_96F5
+                inc     hl
+                inc     de
+                dec     b
+                dec     c
+                jr      loc_96D8
+; ---------------------------------------------------------------------------
+loc_96EF:
+                pop     bc
+                pop     bc
+                dec     b
+                dec     c
+                jr      loc_96C5
+; ---------------------------------------------------------------------------
+loc_96F5:
+                pop     hl
+                pop     bc
+                ld      a, 0
+                jr      c, loc_9705
+                jr      loc_9703
+; ---------------------------------------------------------------------------
+loc_96FD:
+                pop     hl
+                pop     bc
+                ld      a, 0
+                jr      z, loc_9705
+loc_9703:
+                inc     a
+loc_9704:
+                inc     a
+loc_9705:
+                inc     a
+                ld      (Case), a
+                ld      a, b
+                ret
+; End of function sub_96C0
+; =============== S U B R O U T I N E =======================================
+; Copy A bytes from (HL)->(DE) up
+CopyAup:
+                or      a
+                ret     z               ; Return if nothing to move
+                ld      c, a
+                ld      b, 0
+                ldir
+                ret
+; End of function CopyAup
+; =============== S U B R O U T I N E =======================================
+; Copy A bytes from (HL)->(DE) down
+CopyAdn:
+                or      a
+                ret     z               ; Return if nothing to move
+                ld      c, a
+                ld      b, 0
+                lddr
+                ret
+; End of function CopyAdn
+; =============== S U B R O U T I N E =======================================
+; Copy BC bytes from (HL)->(DE) up
+CopyBCup:
+                ld      a, b
+                or      c
+                ret     z               ; Return if nothing to move
+                ldir
+                ret
+; End of function CopyBCup
+; =============== S U B R O U T I N E =======================================
+sub_9721:
+                or      a
+                sbc     hl, de
+                push    hl
+                ld      l, c
+                ld      h, b
+                pop     bc
+                ret     c
+                ret     z
+                ex      de, hl
+                ldir
+                ex      de, hl
+                ret
+; End of function sub_9721
+; =============== S U B R O U T I N E =======================================
+sub_972F:
+                push    hl
+                or      a
+                sbc     hl, bc
+                ld      c, l
+                ld      b, h
+                pop     hl
+                ret     c
+                ret     z
+                lddr
+                ret
+; End of function sub_972F
+; =============== S U B R O U T I N E =======================================
+; Outputs 0x00 terminated string in (HL)
+putStr:
+                ld      a, (hl)
+                or      a
+                ret     z
+                call    putChar         ; Outputs the character on A to the console
+                inc     hl
+                jr      putStr          ; Outputs 0x00 terminated string in (HL)
+; End of function putStr
+; =============== S U B R O U T I N E =======================================
+; Converts a number in (HL) to a string and push it
+NumToStr:
+                dec     hl
+                ld      a, (hl)
+                ld      (Signal1), a
+                dec     hl
+                ld      c, (hl)
+                dec     hl
+                ld      b, (hl)
+                ld      a, c
+                add     a, b
+                rra
+                push    af
+                ld      e, a
+                ld      a, 14
+                sub     e
+                add     a, 3
+                ld      e, a
+                ld      d, 0
+                add     hl, de
+                pop     af
+                ld      a, 0
+                jr      nc, NumToStr1
+                dec     hl
+                inc     a
+NumToStr1:                              ; Push BCD into the stack
+                call    BCDPush
+                ret
+; End of function NumToStr
+; =============== S U B R O U T I N E =======================================
+sub_9766:
+                ld      bc, 3
+                jr      sub_9775
+; End of function sub_9766
+; =============== S U B R O U T I N E =======================================
+; No references to here
+NoRef02:
+                ld      bc, 4
+                jr      sub_9775
+; ---------------------------------------------------------------------------
+                ld      bc, 5
+                jr      sub_9775
+; End of function NoRef02
+; =============== S U B R O U T I N E =======================================
+sub_9775:
+                ex      de, hl
+                push    ix
+                pop     hl
+                or      a
+                sbc     hl, bc
+                push    hl
+                pop     ix
+                ldir
+                ret
+; End of function sub_9775
+; =============== S U B R O U T I N E =======================================
+sub_9782:
+                or      a
+                ret     z
+                ld      c, a
+                ld      b, 0
+                jr      sub_9775
+; End of function sub_9782
+; =============== S U B R O U T I N E =======================================
+; Loads the value in (IX) into HL
+IXtoHL:
+                dec     ix
+                ld      h, (ix+0)
+                dec     ix
+                ld      l, (ix+0)
+                ret
+; End of function IXtoHL
+; =============== S U B R O U T I N E =======================================
+; No references to here
+NoRef03:
+                dec     ix
+                ld      a, (ix-1)
+                ld      (hl), a
+                inc     hl
+                ld      a, (ix+0)
+                ld      (hl), a
+                dec     ix
+                ret
+; End of function NoRef03
+; =============== S U B R O U T I N E =======================================
+; Pulls a number in MStr format from the stack into (HL)
+pullNumber:
+                dec     ix
+                dec     ix
+                ld      a, (ix+0)
+                ld      (hl), a
+                inc     hl
+                jp      sub_9782
+; End of function pullNumber
+; =============== S U B R O U T I N E =======================================
+; Pushes BC long value from (HL) if BC not zero
+PushHLnoZ:
+                ld      a, c
+                or      b
+                ret     z
+                jr      SetI1           ; Pushes a BC long value from (HL) into the stack
+; End of function PushHLnoZ
+; =============== S U B R O U T I N E =======================================
+; Pushes A long value from (HL) if A not zero
+PushAnoZ:
+                or      a
+                ret     z
+                ld      c, a
+                ld      b, 0
+                jr      SetI1           ; Pushes a BC long value from (HL) into the stack
+; End of function PushAnoZ
+; =============== S U B R O U T I N E =======================================
+; No references to here
+NoRef04:
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+; End of function NoRef04
+; =============== S U B R O U T I N E =======================================
+; Pushes pointer in HL onto the stack
+PushP:
+                ld      (ix+0), l
+                inc     ix
+                ld      (ix+0), h
+                inc     ix
+                push    ix
+                pop     hl
+                ld      de, 1Eh
+                add     hl, de
+                sbc     hl, sp
+                jp      p, Error01      ; Stack overflow
+                ret
+; End of function PushP
+; =============== S U B R O U T I N E =======================================
+; Pushes a MStr into the stack
+PushSTR:
+                ld      a, (hl)
+                or      a
+                jr      z, PushSTR1     ; String is null
+                ld      c, a
+                ld      b, 0
+                inc     hl
+                call    SetI1           ; Pushes a BC long value from (HL) into the stack
+PushSTR1:
+                ld      (ix+0), a
+                inc     ix
+                ld      (ix+0), 3
+                inc     ix
+                ret
+; End of function PushSTR
+; =============== S U B R O U T I N E =======================================
+; Set disk block value
+SetD:
+                ld      bc, 3
+                jr      SetI1           ; Pushes a BC long value from (HL) into the stack
+; End of function SetD
+; =============== S U B R O U T I N E =======================================
+; No references to here
+NoRef05:
+                ld      bc, 4
+                jr      SetI1           ; Pushes a BC long value from (HL) into the stack
+; ---------------------------------------------------------------------------
+                ld      bc, 5
+                jr      SetI1
+; End of function NoRef05
+; =============== S U B R O U T I N E =======================================
+; Pushes a BC long value from (HL) into the stack
+SetI1:
+                push    ix
+                pop     de
+                add     ix, bc
+                ldir
+                push    hl
+                ld      hl, 30
+                add     hl, de
+                sbc     hl, sp
+                jp      p, Error01      ; Stack overflow
+                pop     hl
+                ret
+; End of function SetI1
+; =============== S U B R O U T I N E =======================================
+sub_980E:
+                ex      de, hl
+; End of function sub_980E
+; =============== S U B R O U T I N E =======================================
+sub_980F:
+                ld      a, (hl)
+                or      a
+                jr      z, loc_9817
+                inc     a
+                jp      nz, Error39     ; Disk I/O error
+loc_9817:
+                ld      bc, 3
+                ldir
+                ret
+; End of function sub_980F
+; =============== S U B R O U T I N E =======================================
+; Copy INTLN bytes from (DE) to (HL) ; SetI
+CopyIntDEHL:
+                ex      de, hl
+; End of function CopyIntDEHL
+; =============== S U B R O U T I N E =======================================
+; Copy INTLN bytes from (HL) to (DE)
+CopyIntHLDE:
+                ld      bc, INTLN       ; Size of an Integer (5)
+                ldir
+                ret
+; End of function CopyIntHLDE
+; =============== S U B R O U T I N E =======================================
+; Copy (HL) bytes from (HL) to (DE)
+CopyHLDE:
+                ld      c, (hl)
+                ld      b, 0
+                inc     bc
+                ldir
+                ret
+; End of function CopyHLDE
+; =============== S U B R O U T I N E =======================================
+; Shifts the stack towards its base
+ShiftDn:
+                push    af
+                push    de
+                push    bc
+                push    hl
+                or      a
+                jr      z, ShiftDnEnd
+                ld      c, a
+                ld      b, 0
+                ldir
+ShiftDnEnd:
+                push    de
+                pop     ix
+                pop     hl
+                pop     bc
+                pop     de
+                pop     af
+                ret
+; End of function ShiftDn
+; =============== S U B R O U T I N E =======================================
+; Shifts the stack towards its top
+ShiftUp:
+                push    af
+                push    bc
+                ld      b, 0
+                ld      c, a
+                add     hl, bc
+                dec     hl              ; HL to first one to get
+                ex      de, hl
+                add     hl, bc
+                push    hl
+                pop     ix
+                call    SSChk           ; Check for room on the syntax stack
+                ex      de, hl
+                or      a               ; See if no bytes to move
+                jr      z, ShiftUpEnd
+                dec     de
+                lddr
+                inc     de
+ShiftUpEnd:
+                pop     bc
+                pop     af
+                inc     hl
+                ret
+; End of function ShiftUp
+; =============== S U B R O U T I N E =======================================
+; Converts a string on ToS to char (0-255)
+StrToChar:
+                push    hl
+                push    de
+                push    bc
+                ld      a, 0
+                ld      (Result), a     ; Holds the result of called function
+                ld      a, (ix-2)
+                dec     a
+                cp      3
+                jr      nc, StrToChar5
+                add     a, a
+                ld      c, a
+                ld      b, 0
+                ld      hl, StrToChar1
+                add     hl, bc
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      de, 0F00h
+                jp      (hl)
+; ---------------------------------------------------------------------------
+StrToChar1:
+                dw StrToChar4
+                dw StrToChar3
+                dw StrToChar2
+; ---------------------------------------------------------------------------
+StrToChar2:
+                ld      a, (ix-5)
+                and     d
+                cp      3
+                jr      nc, StrToChar5
+                ld      b, a
+                add     a, a
+                add     a, a
+                add     a, b
+                add     a, a
+                ld      e, a
+StrToChar3:
+                ld      a, (ix-4)
+                and     d
+                add     a, e
+                ld      b, a
+                add     a, a
+                add     a, a
+                add     a, b
+                add     a, a
+                jr      c, StrToChar5
+                ld      e, a
+StrToChar4:
+                ld      a, (ix-3)
+                and     d
+                add     a, e
+                jr      c, StrToChar5
+                ld      e, a
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+StrToChar5:
+                ld      a, (ix-2)
+                cpl
+                ld      c, a
+                ld      b, 255
+                dec     bc
+                add     ix, bc
+                ld      a, e
+                pop     bc
+                pop     de
+                pop     hl
+                ret
+; End of function StrToChar
+; =============== S U B R O U T I N E =======================================
+; Converts string on ToS to BCD in (HL)
+StrToBCD:
+                push    af
+                push    de
+                push    bc
+                push    hl
+                push    ix
+                pop     hl
+                dec     hl              ; HL to 3
+                dec     hl              ; HL to Length
+                ld      a, (hl)
+                ld      c, a
+                cpl                     ; For 2's complement of length
+                ld      e, a
+                ld      d, 255
+                inc     de
+                add     hl, de
+                push    hl              ; HL->ToS pointer
+                pop     ix
+                pop     de              ; Get integer start
+                ld      b, INTLN        ; Size of an Integer (5)
+                call    BCDPack         ; Packs a C long string in (HL) into BCD form
+                or      a               ; Check sign
+                jr      z, StrToBCDEnd
+                ld      a, (de)
+                or      11110000b       ; Set sign
+                ld      (de), a
+StrToBCDEnd:
+                ex      de, hl
+                pop     bc
+                pop     de
+                pop     af
+                ret
+; End of function StrToBCD
+; =============== S U B R O U T I N E =======================================
+; Converts the string on ToS to numeric
+StrToNum:
+                push    hl
+                push    de
+                push    bc
+                push    af
+                ex      de, hl
+                push    ix
+                pop     hl
+                dec     hl
+                dec     hl
+                ld      a, (hl)
+                push    af
+                cpl
+                ld      c, a
+                ld      b, 255
+                inc     bc
+                add     hl, bc
+                push    hl
+                pop     ix
+                pop     af
+                ld      c, a
+                ld      b, FLTLN        ; Size of a Float/BCD (14)
+                call    BCDPack         ; Packs a C long string in (HL) into BCD form
+                dec     de
+                ld      (de), a
+                dec     de
+                ld      a, (Count)
+                ld      (de), a
+                dec     de
+                ld      b, a
+                or      a
+                jr      z, StrToNum2
+                dec     c
+StrToNum2:
+                ld      a, c
+                sub     b
+                ld      (de), a
+                pop     af
+                pop     bc
+                pop     de
+                pop     hl
+                ret
+; End of function StrToNum
+; =============== S U B R O U T I N E =======================================
+sub_990E:
+                ld      a, (byte_04FD)
+                or      a
+                jr      z, loc_991D
+                ld      de, ibcdTemp0
+                ld      hl, ibcdV3060
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+loc_991D:
+                call    getChar
+                ld      (tmpChar1), a
+                jp      loc_99B8
+; End of function sub_990E
+; =============== S U B R O U T I N E =======================================
+getChar:
+                push    hl
+                push    de
+                push    bc
+getChar1:                               ; BDOS call 6
+                ld      c, ConsoleIO
+                ld      e, 255          ; ReadChar
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+                or      a               ; Anything returned?
+                jr      z, getChar5     ; No.
+                cp      7               ; Is it Ctrl-G?
+                jr      nz, getChar4    ; No.
+getChar2:                               ; BDOS call 6
+                ld      c, ConsoleIO
+                ld      e, 255          ; ReadChar
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+                or      a               ; Anything returned?
+                jr      z, getChar3     ; No.
+                cp      7               ; Is it Ctrl-G?
+                jr      z, getChar1     ; Yes.
+                ld      c, PunchOut     ; BDOS call 4
+                ld      e, a
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+getChar3:                               ; Check reader device availability
+                call    InPort6
+                jr      z, getChar2
+                ld      c, ReaderIn     ; BDOS call 3
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+                or      a
+                jr      z, getChar2
+                and     01111111b       ; Strip out high bit
+                ld      e, a            ; WriteChar
+                ld      c, ConsoleIO    ; BDOS call 6
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+                jp      getChar2
+; ---------------------------------------------------------------------------
+getChar4:
+                pop     bc
+                pop     de
+                pop     hl
+                ret
+; ---------------------------------------------------------------------------
+getChar5:
+                ld      a, (byte_04FD)
+                or      a
+                jr      z, getChar1
+                ld      hl, ibcdTemp0
+                ld      c, 5
+                call    DbcdHL          ; Decrements by 1 the C bytes long BCD in (HL)
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jr      nz, getChar1
+                ld      hl, ibcdV3060
+                ld      de, ibcdTemp0
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+                ld      hl, HangTime
+                ld      c, 5
+                call    DbcdHL          ; Decrements by 1 the C bytes long BCD in (HL)
+                call    lZtest          ; Tests a C bytes long BCD in (HL) for zero
+                jr      nz, getChar1
+                xor     a
+                ld      (IfSW), a
+                ld      a, CR
+                jr      getChar4
+; End of function getChar
+; =============== S U B R O U T I N E =======================================
+sub_9998:
+                ld      a, (byte_04FD)
+                or      a
+                jr      z, loc_99A7
+                ld      de, ibcdTemp0
+                ld      hl, ibcdV3060
+                call    CopyIntHLDE     ; Copy INTLN bytes from (HL) to (DE)
+loc_99A7:
+                ld      a, (byte_A6A2)
+                ld      d, a
+loc_99AB:                               ; Device 0 (console) buffer
+                ld      hl, D0Buffer
+                ld      c, 0
+loc_99B0:
+                call    getChar
+                cp      13              ; ^M
+                jr      nz, loc_99C7
+                ld      (hl), a
+loc_99B8:
+                xor     a
+                ld      (Wait), a
+                ld      (Time), a
+                ld      (byte_04FD), a
+                ld      a, c
+                ld      (CmdLineSz), a  ; Size of the command line
+                ret
+; ---------------------------------------------------------------------------
+loc_99C7:
+                cp      127
+                jp      z, loc_99E5
+                cp      Blank           ; Space
+                jr      nc, loc_9A1B
+                cp      9               ; ^I
+                jr      z, loc_9A1B
+                cp      3               ; ^C
+                jp      z, PrintErr18
+                cp      1               ; ^A
+                jr      nz, loc_99E1
+                ld      d, 0
+                jr      loc_99B0
+; ---------------------------------------------------------------------------
+loc_99E1:
+                cp      8
+                jr      nz, loc_99F5
+loc_99E5:
+                ld      a, c
+                or      a
+                jr      z, loc_99B0
+                ld      a, d
+                or      a
+                jr      z, loc_99F0
+                call    putBackSP
+loc_99F0:
+                dec     hl
+                dec     c
+                jp      loc_99B0
+; ---------------------------------------------------------------------------
+loc_99F5:
+                cp      18h
+                jr      nz, loc_9A0B
+                ld      a, c
+                or      a
+                jp      z, loc_99B0
+loc_99FE:
+                ld      a, d
+                or      a
+                jr      z, loc_9A05
+                call    putBackSP
+loc_9A05:
+                dec     c
+                jr      nz, loc_99FE
+                jp      loc_99AB
+; ---------------------------------------------------------------------------
+loc_9A0B:
+                cp      10h
+                jp      nz, loc_99B0
+                ld      a, (PrintTgl)
+                xor     00000001b
+                ld      (PrintTgl), a
+                jp      loc_99B0
+; ---------------------------------------------------------------------------
+loc_9A1B:
+                ld      e, a
+                cp      9
+                jr      nz, loc_9A22
+                ld      a, Blank        ; Space
+loc_9A22:
+                and     d
+                call    nz, putChar     ; Outputs the character on A to the console
+                inc     c
+                ld      (hl), e
+                ld      a, 255
+                cp      c
+                jp      z, loc_99B8
+                ld      a, (BytesToRead)
+                cp      c
+                jp      z, loc_99B8
+                inc     hl
+                jp      loc_99B0
+; End of function sub_9998
+; =============== S U B R O U T I N E =======================================
+; Outputs the character on A to the console
+putChar:
+                push    hl
+                push    de
+                push    bc
+                push    af
+                call    BGetChar        ; GetChar (BIOS call)
+                ld      a, (StopTgl)
+                or      a
+                jr      z, putChar1
+                ld      l, ConIn        ; BIOS call 6
+                call    BIOScall
+                xor     a
+                ld      (StopTgl), a
+putChar1:
+                pop     af
+                push    af
+                ld      l, ConOut       ; BIOS call 9
+                ld      c, a
+                call    BIOScall
+                pop     af
+                ld      c, a
+                ld      a, (PrintTgl)
+                or      a
+                jr      z, putChar2
+                ld      l, LstOut       ; BIOS call 12
+                call    BIOScall
+putChar2:
+                pop     bc
+                pop     de
+                pop     hl
+                ret
+; End of function putChar
+; =============== S U B R O U T I N E =======================================
+sub_9A68:
+                push    bc
+                add     hl, bc
+                ld      c, (hl)
+                inc     hl
+                ld      b, (hl)
+                inc     hl
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                pop     hl
+                push    hl
+                add     hl, de
+                ld      (hl), c
+                inc     hl
+                ld      (hl), b
+                pop     hl
+                add     hl, bc
+                inc     hl
+                inc     hl
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ret
+; End of function sub_9A68
+; =============== S U B R O U T I N E =======================================
+; Converts global block number to CP/M file record
+BLKtoCPM:
+                ld      hl, (GLBBlock)  ; Loads HL
+                add     hl, hl          ; Multiplies by 6
+                push    hl
+                add     hl, hl
+                pop     de
+                add     hl, de
+                ld      (GlobalsFCB+33), hl ; Random access record (R0-R1)
+                ld      hl,  GlobalsFCB+35 ; Random access record overflow (R2)
+                ld      (hl), 0
+                ret
+; End of function BLKtoCPM
+; =============== S U B R O U T I N E =======================================
+; Read a global buffer (768 Bytes) in (DE)
+GlobalRead:
+                ld      l, ReadNext     ; BDOS call 20
+                jp      GlobalRW
+; End of function GlobalRead
+; =============== S U B R O U T I N E =======================================
+; Write a global buffer (768 Bytes) in (DE)
+GlobalWrite:
+                ld      l, WriteNext    ; BDOS call 21
+GlobalRW:                               ; Default drive for globals (0-F)
+                ld      a, (GlobalsDR)
+                inc     a
+                ld      (GlobalsFCB), a ; FCB for the globals file
+                ld      b, 6            ; Read 6x128 regs (1 Global block=768)
+GlobalRW1:                              ; BDOS call 26
+                ld      c, SetDMA
+                push    de
+                push    bc
+                push    hl
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+                pop     hl
+                pop     bc
+                push    bc
+                push    hl
+                ld      a, 6
+                cp      b
+                ld      a, l
+                jp      nz, GlobalRW2
+                add     a, ResetDisk    ; BDOS call 13
+GlobalRW2:                              ; BDOS function in A
+                ld      c, a
+                ld      de, GlobalsFCB  ; FCB for the globals file
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+                or      a               ; Is there an error?
+                jp      nz, Error39     ; Disk I/O error
+                pop     hl
+                pop     bc
+                pop     de
+                push    hl
+                ld      a, 6
+                cp      b
+                jp      nz, GlobalRW3
+                ld      hl,  GlobalsFCB+32 ; FCB for the globals file
+                inc     (hl)
+GlobalRW3:
+                ld      hl, 128
+                add     hl, de
+                ex      de, hl
+                pop     hl
+                dec     b
+                jp      nz, GlobalRW1
+                ret
+; End of function GlobalWrite
+; =============== S U B R O U T I N E =======================================
+; Prepares global FCB for reading
+PrepGFCBRead:
+                call    SSChk           ; Check for room on the syntax stack
+                call    BLKtoCPM        ; Converts global block number to CP/M file record
+                ld      hl, (pGLBBuffer3)
+                ex      de, hl
+                call    GlobalRead      ; Read a global buffer (768 Bytes) in (DE)
+                ret
+; End of function PrepGFCBRead
+; =============== S U B R O U T I N E =======================================
+; Prepares global FCB for writing
+PrepGFCBWrite:
+                call    SSChk           ; Check for room on the syntax stack
+                call    BLKtoCPM        ; Converts global block number to CP/M file record
+                ld      hl, (pGlbBufferW) ; Pointer to global buffer to write
+                ld      de, 8
+                add     hl, de
+                ex      de, hl
+                call    GlobalWrite     ; Write a global buffer (768 Bytes) in (DE)
+                ret
+; End of function PrepGFCBWrite
+; =============== S U B R O U T I N E =======================================
+sub_9AF9:
+                ld      hl, 0
+                ld      a, 1
+                ld      (byte_04F8), a
+                ld      de, 0
+loc_9B04:                               ; Current global file block
+                ld      (GLBBlock), hl
+                xor     a
+                ld      (byte_0512), a
+                push    hl
+                push    de
+                call    sub_7995
+                ld      bc, 768         ; (todo) Check this
+                ld      hl, (pGLBBuffer3)
+                ld      a, (byte_04F8)
+                or      a
+                jp      z, loc_9B3C
+                ld      bc, 761
+                ld      de, 5
+                add     hl, de
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ld      a, d
+                or      e
+                jp      z, Error50      ; Running out of global space
+                dec     de
+                ld      (hl), d
+                dec     hl
+                ld      (hl), e
+                inc     hl
+                inc     hl
+                ex      de, hl
+                ld      (word_A648), hl
+                ld      hl, (pGLbBuffer2)
+                ld      (hl), 1
+                ex      de, hl
+loc_9B3C:
+                pop     de
+loc_9B3D:
+                ld      a, (hl)
+                or      a
+                jp      nz, loc_9B53
+                inc     hl
+                inc     de
+                dec     bc
+                ld      a, c
+                or      b
+                jp      nz, loc_9B3D
+                xor     a
+                ld      (byte_04F8), a
+                pop     hl
+                inc     hl
+                jp      loc_9B04
+; ---------------------------------------------------------------------------
+loc_9B53:
+                pop     bc
+                ld      bc, 0
+                ex      de, hl
+loc_9B58:
+                rlca
+                jp      c, loc_9B60
+                inc     bc
+                jp      loc_9B58
+; ---------------------------------------------------------------------------
+loc_9B60:
+                add     hl, hl
+                add     hl, hl
+                add     hl, hl
+                add     hl, bc
+                ld      (GLBBlock), hl  ; Current global file block
+                xor     a
+                ld      (byte_0512), a
+                scf
+                ex      de, hl
+                inc     c
+loc_9B6E:
+                rra
+                dec     c
+                jp      nz, loc_9B6E
+                cpl
+                and     (hl)
+                ld      (hl), a
+                ld      hl, (pGLbBuffer2)
+                ld      (hl), 1
+                ret
+; End of function sub_9AF9
+; =============== S U B R O U T I N E =======================================
+sub_9B7C:
+                ld      hl, (GLBBlock)  ; Current global file block
+                push    hl
+                ld      bc, 38h         ; '8'
+                add     hl, bc
+                ld      a, l
+                and     00000111b
+                ld      e, a
+                ld      d, 3            ; (todo)
+loc_9B8A:
+                xor     a
+                rr      h
+                rr      l
+                dec     d
+                jr      nz, loc_9B8A
+                or      a
+                ld      bc, 768
+loc_9B96:
+                sbc     hl, bc
+                jr      c, loc_9B9D
+                inc     d
+                jr      loc_9B96
+; ---------------------------------------------------------------------------
+loc_9B9D:
+                add     hl, bc
+                push    hl
+                push    de
+                ld      l, d
+                ld      h, 0
+                ld      (GLBBlock), hl  ; Current global file block
+                call    sub_7995
+                pop     de
+                pop     hl
+                xor     a
+                scf
+                inc     e
+loc_9BAE:
+                rra
+                dec     e
+                jp      nz, loc_9BAE
+                ex      de, hl
+                ld      hl, (pGLBBuffer3)
+                add     hl, de
+                or      (hl)
+                ld      (hl), a
+                ld      hl, (pGLbBuffer2)
+                ld      (hl), 1
+                pop     hl
+                push    hl
+                ld      (GLBBlock), hl  ; Current global file block
+                call    sub_7995
+                ld      hl, (pGLBBuffer1)
+                ld      (pGlbBufferW), hl ; Pointer to global buffer to write
+                ld      hl, (pGLbBuffer2)
+                ld      (hl), 0
+                call    sub_5A67
+                call    sub_629D
+                ld      hl, (word_A648)
+                inc     hl
+                ld      (word_A648), hl
+                ld      hl, 0
+                ld      (GLBBlock), hl  ; Current global file block
+                call    sub_7995
+                ld      hl, (word_A648)
+                ex      de, hl
+                ld      hl, (pGLBBuffer3)
+                ld      bc, 5
+                add     hl, bc
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pGLbBuffer2)
+                ld      (hl), 1
+                pop     hl
+                ld      (GLBBlock), hl  ; Current global file block
+                ret
+; End of function sub_9B7C
+; =============== S U B R O U T I N E =======================================
+sub_9C00:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ld      c, SetDMA       ; BDOS call 26
+                ld      de, Page0BUF
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+                ld      a, (byte_A6A5)
+                or      a
+                jr      z, loc_9C3F
+                xor     a
+                ld      (byte_A6A5), a
+                ld      hl, (pTmp9)
+                ld      de, 8
+                sbc     hl, de
+                ld      a, (I1)
+                cp      3
+                jr      z, loc_9C29
+                dec     hl
+                dec     hl
+                dec     hl
+loc_9C29:
+                dec     hl
+                ld      bc, 32
+                ld      de, Page0FCB
+                ldir
+                ld      de, Page0FCB
+                ld      a, (RoutinesDR) ; Default drive for routines (0-F)
+                inc     a
+                ld      (de), a
+                ld      c, SearchFirst  ; BDOS call 17
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+loc_9C3F:
+                ld      de, (pTmp2)
+                ld      a, (RoutinesDR) ; Default drive for routines (0-F)
+                inc     a
+                ld      (de), a
+                ld      c, SearchFirst  ; BDOS call 17
+                ld      a, (tmpChar2)
+                add     a, c
+                ld      c, a
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+                cp      255
+                jp      nz, loc_9C5D
+                ld      a, 0
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; ---------------------------------------------------------------------------
+loc_9C5D:
+                and     00000011b
+                ld      hl, 128
+                add     a, a
+                add     a, a
+                add     a, a
+                add     a, a
+                add     a, a
+                ld      e, a
+                ld      d, 0
+                add     hl, de
+                inc     hl
+                ld      (pTmp1), hl
+                ret
+; End of function sub_9C00
+; =============== S U B R O U T I N E =======================================
+; Find first file
+FFirst:
+                call    SSChk           ; Check for room on the syntax stack
+                call    PrepFCB         ; Prepares the FCB
+                ld      c, SetDMA       ; BDOS call 26
+                ld      de, Page0BUF
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+                ld      hl, (pDevFileName)
+                ld      a, (Drive)      ; Current disk drive
+                inc     a
+                ld      (hl), a
+                ex      de, hl
+                ld      c, SearchFirst  ; BDOS call 17
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+                inc     a
+                jp      nz, FFirst1
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; ---------------------------------------------------------------------------
+FFirst1:
+                ld      a, 1
+                ld      (Result), a     ; Holds the result of called function
+                ret
+; End of function FFirst
+; =============== S U B R O U T I N E =======================================
+; Reset disk system
+DiskReset:
+                ld      c, ResetDisk    ; BDOS call 13
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+                ret
+; End of function DiskReset
+; =============== S U B R O U T I N E =======================================
+; Compute file size
+FSize:
+                ld      de, (pDevFileName)
+                ld      a, (Drive)      ; Current disk drive
+                inc     a
+                ld      (de), a
+                ld      c, FileSize     ; BDOS call 35
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+                ld      hl, (pDevFileName)
+                ld      bc, 33
+                add     hl, bc
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                ld      (pIndex), hl
+                call    sub_9321
+                ld      hl, ibcdTemp0
+                call    StrToBCD        ; Converts string on ToS to BCD in (HL)
+                ret
+; End of function FSize
+; =============== S U B R O U T I N E =======================================
+; Read random file record in DE
+FRndRead:
+                ld      hl, ibcdTemp0
+                call    sub_92E1
+                ld      a, (Result)     ; Holds the result of called function
+                cp      0
+                jp      z, Error48      ; Invalid parameter
+                ex      de, hl
+                ld      hl, (pDevFileName)
+                ld      bc, 33
+                add     hl, bc
+                ld      (hl), e
+                inc     hl
+                ld      (hl), d
+                ld      hl, (pFRWBuffer) ; Pointer to file R/W buffer
+                ex      de, hl
+                ld      c, SetDMA       ; BDOS call 26
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+                ld      de, (pDevFileName)
+                ld      a, (Drive)      ; Current disk drive
+                inc     a
+                ld      (de), a
+                ld      c, ReadRandom   ; BDOS call 33
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+                or      a
+                ret     z
+                jp      Error48         ; Invalid parameter
+; End of function FRndRead
+; =============== S U B R O U T I N E =======================================
+; Create file
+FCreate:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (pDevFileName)
+                ld      a, (Drive)      ; Current disk drive
+                inc     a
+                ld      (hl), a
+                ex      de, hl
+                ld      c, MakeFile     ; BDOS call 22
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+                inc     a
+                ret     nz
+                jp      Error09         ; Directory full
+; End of function FCreate
+; =============== S U B R O U T I N E =======================================
+; Sequential write file (5 retries)
+FSeqWrite:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (pFRWBuffer) ; Pointer to file R/W buffer
+                ex      de, hl
+                ld      c, SetDMA       ; BDOS call 26
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+                ld      hl, (pDevFileName)
+                ld      a, (Drive)      ; Current disk drive
+                inc     a
+                ld      (hl), a
+                ld      b, 5
+FSeqWrite2:
+                ld      hl, (pDevFileName)
+                ex      de, hl
+                ld      c, WriteNext    ; BDOS call 21
+                push    bc
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+                or      a
+                pop     bc
+                ret     z
+                dec     b
+                jp      z, Error39      ; Disk I/O error
+                ld      l, HomeDsk      ; BIOS call 21
+                call    BIOScall
+                jp      FSeqWrite2
+; End of function FSeqWrite
+; =============== S U B R O U T I N E =======================================
+; Does nothing
+Null3:
+                ret                     ; There's no reference to here
+; End of function Null3
+; =============== S U B R O U T I N E =======================================
+; Close globals file
+GFClose:
+                ld      hl, GlobalsFCB  ; FCB for the globals file
+                ld      (pDevFileName), hl
+                ld      a, (GlobalsDR)  ; Default drive for globals (0-F)
+                ld      (Drive), a      ; Current disk drive
+FClose:                                 ; Close file
+                call    SSChk
+                ld      hl, (pDevFileName)
+                ld      a, (Drive)      ; Current disk drive
+                inc     a
+                ld      (hl), a
+                ex      de, hl
+                ld      c, CloseFile    ; BDOS call 16
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+                ret
+; End of function GFClose
+; =============== S U B R O U T I N E =======================================
+; Open globals file
+GFOpen:
+                call    SSChk           ; Check for room on the syntax stack
+                call    PrepFCB         ; Prepares the FCB
+FOpen:                                  ; Open file
+                ld      hl, (pDevFileName)
+                ld      a, (Drive)      ; Current disk drive
+                inc     a
+                ld      (hl), a
+                ex      de, hl
+                ld      c, OpenFile     ; BDOS call 15
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+                inc     a
+                ret     nz
+                ld      a, (FCBType)    ; 0:Global, 1:Routine, 2:File
+                or      a
+                jp      nz, Error38     ; Routine not on disk
+                jp      Error37         ; Global file not on disk
+; End of function GFOpen
+; =============== S U B R O U T I N E =======================================
+sub_9D7F:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (pFRWBuffer) ; Pointer to file R/W buffer
+                ex      de, hl
+                ld      c, SetDMA       ; BDOS call 26
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+                ld      hl, (pDevIsOpen) ; 0=Closed 1=Open
+                ld      a, 00010000b
+                and     (hl)
+                jr      z, loc_9D9F
+                ld      a, (hl)
+                and     11101111b
+                ld      (hl), a
+                ld      hl, (pDevFileName)
+                ld      bc, Blank       ; Space
+                add     hl, bc
+                inc     (hl)
+loc_9D9F:
+                ld      hl, (pDevFileName)
+                ld      a, (Drive)      ; Current disk drive
+                inc     a
+                ld      (hl), a
+                ex      de, hl
+                ld      c, ReadNext     ; BDOS call 20
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+                cp      2
+                jp      nc, Error39     ; Disk I/O error
+                ld      hl, (pFRWBuffer) ; Pointer to file R/W buffer
+                ld      de, 0
+                ld      c, 128
+                ld      b, a
+loc_9DBB:
+                ld      a, (hl)
+                cp      EOF             ; ^Z=SUB/EOF
+                jr      z, loc_9DD2
+                inc     hl
+                inc     de
+                dec     c
+                jr      nz, loc_9DBB
+                ld      a, b
+                or      a
+                jp      z, loc_9DD2
+                ld      de, 0
+                ld      hl, (pFRWBuffer) ; Pointer to file R/W buffer
+                ld      (hl), EOF       ; ^Z=SUB/EOF
+loc_9DD2:
+                ex      de, hl
+                ld      (word_A622), hl
+                ret
+; End of function sub_9D7F
+; =============== S U B R O U T I N E =======================================
+; Delete file
+FDelete:
+                call    SSChk           ; Check for room on the syntax stack
+                ld      hl, (pDevFileName)
+                ld      a, (Drive)      ; Current disk drive
+                inc     a
+                ld      (hl), a
+                ld      hl, (pDevFileName)
+                ld      a, (Drive)      ; Current disk drive
+                inc     a
+                ld      (hl), a
+                ex      de, hl
+                ld      c, DeleteFile   ; BDOS call 19
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+                ret
+; End of function FDelete
+; =============== S U B R O U T I N E =======================================
+; Prepares the FCB
+PrepFCB:
+                ld      a, (FCBType)    ; 0:Global, 1:Routine, 2:File
+                or      a
+                jp      nz, PrepFCB1
+                ld      hl, GlobalsFCB  ; FCB for the globals file
+                ld      (pDevFileName), hl
+                ld      hl,  GlobalsFCB+12 ; FCB for the globals file
+                ld      (hl), 0
+                ret
+; ---------------------------------------------------------------------------
+PrepFCB1:
+                cp      1
+                jp      nz, PrepFCB2
+                ld      hl,  RTNFCB+1   ; Routine FCB
+                jp      PrepFCB3
+; ---------------------------------------------------------------------------
+PrepFCB2:
+                ld      hl, (pDevDrive)
+                ld      e, (hl)
+                inc     hl
+                ld      d, (hl)
+                ex      de, hl
+                inc     hl
+PrepFCB3:
+                ld      (pDevFileName), hl
+                push    ix
+                pop     hl
+                dec     hl
+                dec     hl
+                ld      c, (hl)
+                ld      a, c
+                cpl
+                ld      e, a
+                ld      d, 255
+                inc     de
+                add     hl, de
+                push    hl
+                pop     ix
+                ld      hl, (pDevFileName)
+                ex      de, hl
+                push    ix
+                pop     hl
+                xor     a
+                ld      (de), a
+                push    de
+                inc     de
+                ld      b, 11
+                ld      a, Blank        ; Space
+PrepFCB4:
+                ld      (de), a
+                inc     de
+                dec     b
+                jp      nz, PrepFCB4
+                or      b
+                jp      z, PrepFCB5
+                ld      b, 15h
+                xor     a
+                jp      PrepFCB4
+; ---------------------------------------------------------------------------
+PrepFCB5:
+                pop     de
+                ld      b, 8
+PrepFCB6:
+                inc     de
+                ld      a, (hl)         ; Check for lowercase char
+                cp      'a'
+                jr      c, PrepFCB7
+                cp      '{'
+                jr      nc, PrepFCB7
+                and     11011111b       ; Make uppercase
+PrepFCB7:
+                cp      Point
+                jp      z, PrepFCB8
+                inc     hl
+                ld      (de), a
+                dec     c
+                jp      z, PrepFCBE
+                dec     b
+                jp      nz, PrepFCB6
+                ld      a, (hl)
+                cp      Point
+                jp      nz, PrepFCBE
+                inc     de
+PrepFCB8:
+                inc     hl
+                dec     c
+                push    bc
+                ld      c, b
+                ld      b, 0
+                ex      de, hl
+                add     hl, bc
+                ex      de, hl
+                dec     de
+                pop     bc
+                ld      b, 3
+                jp      PrepFCB6
+; ---------------------------------------------------------------------------
+PrepFCBE:                               ; 0:Global, 1:Routine, 2:File
+                ld      a, (FCBType)
+                cp      2               ; Is it normal file?
+                ret     z
+                ld      c, b            ; If not adds .MMP extension
+                ld      b, 0
+                ex      de, hl
+                add     hl, bc
+                ld      (hl), 'M'
+                inc     hl
+                ld      (hl), 'M'
+                inc     hl
+                ld      (hl), 'P'
+                ret
+; End of function PrepFCB
+; =============== S U B R O U T I N E =======================================
+; Does nothing
+Null4:
+                ret                     ; There's no reference to here
+; End of function Null4
+; =============== S U B R O U T I N E =======================================
+; Does nothing
+Null2:
+                ret
+; End of function Null2
+; ---------------------------------------------------------------------------
+;
+;=====================   DATA AREA 1   ======================================
+;
+Nil             db 0FFh, 0FFh, 0FFh
+GZero           db 0, 0, 0
+ibcdTemp0       db 0, 0, 0, 0, 0
+ibcdTemp1       db 0, 0, 0, 0, 0
+ibcdTemp2       db 0, 0, 0, 0, 0
+ibcdDay         db 0, 0, 0, 0, 0        ; Day in BCD5
+ibcdTime        db 0, 0, 0, 0, 0        ; Time in BCD5
+ibcd1           db 0, 0, 0, 0, 0
+ibcdUnk05       db 0, 0, 0, 0, 0
+ibcdV0          db 0, 0, 0, 0, 0
+ibcdV1          db 0, 0, 0, 0, 1
+ibcdV2          db 0, 0, 0, 0, 2
+ibcdV127        db 0, 0, 0, 1, 27h
+ibcdVmin1       db 0F0h, 0, 0, 0, 1
+ibcdV255        db 0, 0, 0, 2, 55h
+ibcdVmax        db 9, 99h, 99h, 99h, 99h
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+lbcdTemp1       db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+lbcdTemp2       db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+ibcdResult      db 0, 0, 0, 0, 0        ; Operation result
+                db 0, 0, 0
+byte_9F0F       db 0, 0, 0, 0, 0, 0
+byte_9F15       db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+byte_9F23       db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+vW              db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0
+FReal           db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0
+lbcdRandom      db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1
+lbcdRandomL     db 0, 0, 0, 0, 0, 0, 0, 0, 23h, 45h, 67h, 89h, 87h, 63h
+TPP             dw 0
+Result          db 0                    ; Holds the result of called function
+Case            db 0
+bmActFL         db 0
+Token           db 0
+Index           dw 0
+Locks           db 0
+IndFL           db 0                    ; Indirection flag
+IndSW           db 0
+DoSW            db 0
+ForSW           db 0
+bmFlag          db 0
+Mode            db 1
+                db 0
+pPlus1000       dw 0
+pSymStack       dw 0                    ; Symbol stack
+                db 0
+                db 0
+IODevice        db 0                    ; Current IO device
+JobIndex        db 0, 0, 0, 0, 0
+IfSW            db 0
+pCurRtnLine     dw 0                    ; Pointer to current routine line
+pStartOfRtn     dw 0                    ; Pointer to the start of the loaded routine
+pLineBefore     dw 0                    ; Pointer to the previous routine line
+pEndOfRtn       dw 0                    ; Pointer to the end of the loaded routine
+pRtnName        dw 0                    ; Pointer to the current routine name
+word_9F96       dw 0
+word_9F98       dw 0
+word_9F9A       dw 0
+pSymbolTbl      dw 0                    ; Pointer to the symbol table
+pEnd            dw 0
+bBDOSaddr       dw 0                    ; Address of the BDOS entry point
+                dw 0FF01h
+sBreak          db 'B R E A K  ---  ',0
+sRoutinesOn     db 0Dh,'ROUTINES ON '
+RDrLetter       db 0
+sGlobalsOn      db 0Ch,'GLOBALS ON '
+GDrLetter       db 0
+Minus1          db 2,'-1'               ; -1 in M string format
+byte_9FD3       db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+VarName         db 0, 0, 0, 0, 0, 0, 0, 0, 0
+word_A049       dw 0
+byte_A04B       db 0
+ArgPl           db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+DevTable        db 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0FFh
+                dw 0
+                dw D0Buffer             ; Device 0 (console) buffer
+                dw 0
+                db 0
+                db 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 84h
+                dw 0
+                dw D1Buffer             ; Device 1 (printer) buffer
+                dw 0
+                db 0
+                db 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 80h
+                dw D2FCB                ; Device 2 FCB
+                dw D2Buffer             ; Device 2 buffer
+                dw 0
+                db 0
+                db 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 80h
+                dw D3FCB                ; Device 3 FCB
+                dw D3Buffer             ; Device 3 buffer
+                dw 0
+                db 0
+                db 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 80h
+                dw D4FCB                ; Device 4 FCB
+                dw D4Buffer             ; Device 4 buffer
+                dw 0
+                db 0
+                db 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0FFh
+                dw 0
+                dw UBuffer1
+                dw 0
+RTNFCB          db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ; Routine FCB
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0
+                db 0
+D2FCB           db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ; Device 2 FCB
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0
+                db 0
+D3FCB           db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ; Device 3 FCB
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0
+                db 0
+D4FCB           db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ; Device 4 FCB
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0
+                db 0
+sErr1           db 'ERR: '
+sErr2           db '  ',0Dh
+sIndirection    db 0Bh,'Indirection'
+sXecute         db 6,'Xecute'
+mmpFCB          db 0                    ; FCB for listing *.MMP (view 3)
+                db '????????MMP'
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0
+fileFCB         db 0                    ; FCB for listing *.* (view 4)
+                db '???????????'
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0
+dirFCB          db 0
+                db 'DIR     DIR'
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0
+D1Buffer        db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ; Device 1 (printer) buffer
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0
+D2Buffer        db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ; Device 2 buffer
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+D3Buffer        db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ; Device 3 buffer
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+D4Buffer        db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ; Device 4 buffer
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+UBuffer1        db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+UBuffer2        db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0
+SaveRtnBuf      db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0
+Wait            db 0
+Time            db 0
+HangTime        db 0, 0, 0, 0, 0
+ibcdV8000       db 0, 0, 0, 80h, 0
+ibcdV3060       db 0, 0, 0, 30h, 60h
+ibcdV2700       db 0, 0, 0, 27h, 0
+byte_A60B       db 0
+                db 0
+byte_A60D       db 0
+                db 0
+byte_A60F       db 0
+byte_A610       db 0
+                db 0
+                db 0
+                db 0
+                db 0
+                db 0
+                db 0
+byte_A617       db 0, 0, 0
+byte_A61A       db 0, 0, 0
+errIndex        db 0, 0, 0, 0, 0        ; Offset from the label where the error ocurred
+word_A622       dw 0
+word_A624       dw 0
+word_A626       dw 0
+word_A628       dw 0
+word_A62A       dw 0
+word_A62C       dw 0
+pGlbBufferW     dw 0                    ; Pointer to global buffer to write
+word_A630       dw 0
+word_A632       dw 0
+word_A634       dw 0
+word_A636       dw 0
+word_A638       dw 0
+word_A63A       dw 0
+word_A63C       dw 0
+SymCount        dw 0                    ; Number of symbols defined
+word_A640       dw 0
+word_A642       dw 0
+word_A644       dw 0
+                db 0
+                db 0
+word_A648       dw 0
+word_A64A       dw 0
+                db 0
+                db 0
+word_A64E       dw 0
+pStkStart       dw 0
+word_A652       dw 0
+word_A654       dw 0
+TRtnName        db 0, 0, 0, 0, 0, 0, 0, 0, 0 ; Temp routine name storage
+errIndStr       db 0, 0, 0, 0, 0, 0, 0, 0, 0 ; Error index in MStr format
+errLabel        db 0, 0, 0, 0, 0, 0, 0, 0, 0 ; Label where the error ocurred
+byte_A671       db 0, 0, 0, 0, 0, 0, 0, 0, 0
+byte_A67A       db 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0
+sDev            db 3,'DEV'
+sColon          db 3,' : '
+byte_A691       db 0
+byte_A692       db 0
+byte_A693       db 0
+byte_A694       db 0
+byte_A695       db 0
+byte_A696       db 0
+byte_A697       db 0
+byte_A698       db 0
+byte_A699       db 0
+byte_A69A       db 0
+                db 0
+Auto            db 0
+BreakFL         db 0                    ; 1=On Break
+byte_A69E       db 0
+byte_A69F       db 0
+bBreakVal       db 1                    ; Value passed to BREAK command
+byte_A6A1       db 0
+byte_A6A2       db 0FFh
+byte_A6A3       db 0
+byte_A6A4       db 0
+byte_A6A5       db 0
+;
+; Code from this point on gets overwritten by the stack
+;
+Stack:
+; =============== S U B R O U T I N E =======================================
+; Generates the random seed
+RandomSeed:
+                ld      hl, lbcdRandom
+                ld      c, FLTLN        ; Size of a Float/BCD (14)
+                call    IbcdHL          ; Increments by 1 the C bytes long BCD in (HL)
+                ld      l, ConSt        ; BIOS call 3
+                call    BIOScall
+                or      a
+                jr      z, RandomSeed   ; Generates the random seed
+                ld      hl,  lbcdRandom+0Dh
+                ld      a, (hl)
+                and     11110000b
+                or      00000001b
+                ld      (hl), a
+                ret
+; End of function RandomSeed
+; =============== S U B R O U T I N E =======================================
+Init:
+                ld      sp, bbcdMonth   ; New stack is below bcdMonth
+EnterDate:
+                ld      de, sEnterDate
+                ld      c, PrintString  ; BDOS call 9
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+                ld      de, iBufferSZ   ; Input buffer size
+                ld      c, BufferIn     ; BDOS call 10
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+                ld      hl, iBuffer     ; Input buffer
+                ld      a, (hl)         ; Reads the number of chars typed
+                or      a
+                jp      z, EndInit      ; No characters typed
+                cp      8
+                jp      nz, EnterDate   ; Different than 8
+                inc     hl              ; Point to the fist char typed
+                ld      de, 112h        ; Month validation (D=1 E=12)
+                call    ChkRange        ; Checks date fields against BCD ranges in D and E
+                jp      nz, EnterDate
+                ld      a, b
+                ld      (bbcdMonth), a  ; Month in BCD
+                ld      a, c
+                ld      (binMonth), a   ; Month in binary
+                ld      de, 131h        ; Day validation (D=1 E=31)
+                call    ChkRange        ; Checks date fields against BCD ranges in D and E
+                jp      nz, EnterDate
+                ld      a, b
+                ld      (ibcdDay+4), a  ; Day in BCD5
+                ld      de, 8191h       ; Year validation (D=81 E=91)
+                call    ChkRange        ; Checks date fields against BCD ranges in D and E
+                jp      nz, EnterDate
+                ld      a, b
+                ld      (ibcdYear+4), a ; Year in BCD
+                ld      a, c
+                ld      (binYear), a    ; Year in binary
+                ld      a, (binMonth)   ; Month in binary
+                dec     a
+                add     a, a
+                ld      c, a
+                ld      b, 0
+                ld      hl, nDaysTableW
+                add     hl, bc
+                ld      de,  ibcdDay+3  ; Day in BCD5
+                ex      de, hl
+                ld      c, 2
+                call    AbcdDEHL        ; Adds two C bytes long BCDs in (DE) and (HL)
+                                        ; result goes in (HL)
+                ld      a, (binYear)    ; Year in binary
+                cp      84              ; 1984 was a leap year
+                jp      z, EnterDate1
+                cp      88              ; 1988 was a leap year
+                jp      nz, EnterDate2
+EnterDate1:                             ; Month in binary
+                ld      a, (binMonth)
+                cp      3
+                jp      c, EnterDate2
+                call    IbcdHL          ; Increments by 1 the C bytes long BCD in (HL)
+EnterDate2:                             ; Year in BCD
+                ld      a, (ibcdYear+4)
+                sub     129
+                ld      (ibcdYear+4), a ; Year in BCD
+                ld      hl, ibcdYear    ; Year in BCD
+                ld      de, ibcdV365    ; 365 in BCD
+                ld      c, 5
+                call    MbcdDEHL        ; Multiplies two C bytes long BCD in (DE) and (HL)
+                                        ; result goes in ibcdResult
+                ld      hl, ibcdDay     ; Day in BCD5
+                ld      de, ibcdResult  ; Operation result
+                call    AbcdDEHL        ; Adds two C bytes long BCDs in (DE) and (HL)
+                                        ; result goes in (HL)
+                ld      de, ibcdV51134  ; BCD 51134 = 31/12/80
+                call    AbcdDEHL        ; Adds two C bytes long BCDs in (DE) and (HL)
+                                        ; result goes in (HL)
+                ld      a, (binYear)    ; Year in binary
+                cp      85
+                jp      c, EndInit
+                cp      89
+                jp      c, EnterDate3
+                call    IbcdHL          ; Increments by 1 the C bytes long BCD in (HL)
+EnterDate3:                             ; Increments by 1 the C bytes long BCD in (HL)
+                call    IbcdHL
+EndInit:                                ; New line x 3
+                ld      de, sNewLinex3
+                ld      c, PrintString  ; BDOS call 9
+                call    BDOScall        ; Makes a call to the CP/M BDOS
+                jp      Start           ; Startup initializations
+; End of function Init
+; =============== S U B R O U T I N E =======================================
+; Checks date fields against BCD ranges in D and E
+ChkRange:
+                ld      a, (hl)         ; Gets the digit pointed by HL
+                cp      30h             ; Compares with '0'
+                jp      c, ChkRange2    ; If smaller there's an error
+                cp      Colon           ; Compares with ':'
+                jp      nc, ChkRange2   ; If not smaller there's an error
+                and     00001111b       ; Clears the high 4 bits
+                ld      c, a            ; Saves A on C
+                rla                     ; Slides the digit left 4 bits
+                rla
+                rla
+                rla
+                ld      b, a            ; Keeps the left 4 bits in B
+                ld      a, c            ; Restores A from C
+                add     a, a            ; Multiplies by 10 ...
+                add     a, a
+                add     a, c
+                add     a, a
+                ld      c, a            ; ... and saves on C
+                inc     hl              ; Gets the next digit
+                ld      a, (hl)
+                cp      30h             ; Compares with '0'
+                jp      c, ChkRange2    ; If smaller there's an error
+                cp      Colon           ; Compares with ':'
+                jp      nc, ChkRange2   ; If not smaller there's an error
+                and     00001111b       ; Clears the high 4 bits
+                push    af              ; Saves A on the stack
+                or      b
+                ld      b, a            ; Saves BCD version on B
+                pop     af              ; Restores A from the stack
+                add     a, c
+                ld      c, a            ; Saves binary version on C
+                inc     hl              ; Skips the /
+                inc     hl              ; Points to the next field
+                ld      a, b
+                cp      d               ; Checks the BCD lower limit
+                jp      c, ChkRange2
+                cp      e               ; Checks the BCD higher limit
+                jp      c, ChkRange1
+                jp      nz, ChkRange2
+ChkRange1:                              ; Theres no error, A<-0
+                xor     a
+                jp      ChkRange3
+; ---------------------------------------------------------------------------
+ChkRange2:                              ; There's error, A<-1
+                ld      a, 1
+ChkRange3:                              ; Updates the Zero flag
+                or      a
+                ret
+; End of function ChkRange
+; ---------------------------------------------------------------------------
+;
+;=====================   DATA AREA 2   ======================================
+;
+sEnterDate      db 0Dh,0Ah
+                db 'Enter today',27h,'s date (mm/dd/yy): $'
+sEnterTime      db 0Dh,0Ah              ; Not used in CP/M
+                db 'Enter the current time (hh:mm): $'
+sNewLinex3      db 0Dh, 0Ah, 0Ah, 0Ah, 24h ; New line x 3
+ibcdYear        db 0, 0, 0, 0, 0        ; Year in BCD
+                db 0, 0, 0, 0, 0
+; ----
+nDaysTableW     db 0, 0
+                db 0, 31h
+                db 0, 59h
+                db 0, 90h
+                db 1, 20h
+                db 1, 51h
+                db 1, 81h
+                db 2, 12h
+                db 2, 43h
+                db 2, 73h
+                db 3, 4
+                db 3, 34h
+; ----
+ibcdV60         db 0, 0, 0, 0, 60h
+ibcdV365        db 0, 0, 0, 3, 65h      ; 365 in BCD
+ibcdV51134      db 0, 0, 5, 11h, 34h    ; BCD 51134 = 31/12/80
+iBufferSZ       db 20                   ; Input buffer size
+iBuffer         db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ; Input buffer
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0
+bbcdMonth       db 0                    ; Month in BCD
+binMonth        db 0                    ; Month in binary
+binYear         db 0                    ; Year in binary
+sGreet          db 'Z80 Mumps - Version 4.06',0Dh,0Ah
+                db 'rebuilt in Feb/2014 by Marcelo Dantas',0Dh,0Ah
+                db 'marcelo.f.dantas@gmail.com'
+if BINMODE
+                ; Binary file support
+                db 0Dh, 0Ah
+                db '(binary file mode)', 0Dh, 0Ah
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+else
+                ; Regular file support
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+endif
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+; end of 'Code'
+                end

@@ -1,0 +1,41 @@
+glist	; Lists contents of a global or variable
+	; by Marcelo Dantas
+	;
+r	r !!,"Global name: ^",name q:name=""
+	i name="?" w ! v 2 g r
+	i name="tst" d testset
+	e  s name="^"_name
+	i $d(@name)=0 w !,"Variable ",name," doesn't exist." q
+	s lvl=0
+l0	s var=name
+	i lvl>0 d bindex
+	s dat=$d(@var) i dat#2 d printv
+	i dat>1 s lvl=lvl+1,ind(lvl)="" d bindex s ind(lvl)=$o(@var) g l0
+	g:lvl=0 r
+	s ind(lvl)=$o(@var) g:ind(lvl)'="" l0
+l1	s lvl=lvl-1 g:lvl=0 r
+	d bindex s ind(lvl)=$o(@var) g:ind(lvl)'="" l0
+	g l1
+bindex	s idx="",i=1
+b0	s v=ind(i) s:v+0'=v v=""""_v_""""
+	s idx=idx_v s:i<lvl idx=idx_","
+	s i=i+1 g:i'>lvl b0
+	s var=name_"("_idx_")"
+	q
+printv	s v=@var  s:v+0'=v v=""""_v_""""
+	w !,var,?16,"= ",v
+	q
+	;
+testset	;
+	s tst=10
+	s tst(1)="leaf 1"
+	s tst(2,1)="leaf 2,1"
+	s tst(2,2)="leaf 2,2"
+	s tst(2,2,"ABC")="leaf 2,2,ABC"
+	s tst(2,10)="leaf 2,10"
+	s tst(2,10,2)="leaf 2,10,2"
+	s tst(3)="leaf 3"
+	s tst(4)="leaf 4"
+	q
+	;
+z	zs glist zp glist q

@@ -1,0 +1,58 @@
+%M9 ;John Lewkowicz - NYS College of Vet. Medicine
+ ;Cont. Programmer Utilities - Help Text
+ G ^%M10:$T(@Q)=""
+ W !!,"- - -",?17,"- - - Use '^' to BACKup a question - - -",?73,"- - -",!
+ I $D(FDR),FDR'=SDR ZO (SDR:SDG)
+ F I=0:1 S X=$T(@Q+I) Q:X=""!(A="?"&I)!(I&($P(X," ",1)'=""))  D WRITE
+ I I,A="?",X'=""&($P(X," ",1)="") W !,?20,"Enter ",@LH,"??",@HL," for more Help.",!
+ I 'I W !!,?20,"NO Help available for this question.",!
+ W !,"- - -",?37,"- - -",?73,"- - -",! K I,X
+ I $D(FDR),FDR'=SDR ZO (FDR:FDR)
+ Q
+WRITE I 'I W @LH,!,$P(X,DS,2,99),@HL,! Q
+ W ! S X=$P(X,DS,2,99) F J=1:1 W @$S(J#2:HL,1:LH),$P(X,"~",J) Q:$P(X,"~",J+1)=""
+ W @HL Q
+SDR ;Default Drive on which ROUTINES normally reside (A-H).
+SDG ;Default Drive on which GLOBALS normally reside (A-H).
+SDS ;Default Drive to which SDP (devices 2,3, and 4) requests will be directed.
+ROG ;Enter R, G, or T or <RETURN> to Quit.
+ ;~R~  To work on ROUTINES.
+ ;~G~  To work on GLOBALS.
+ ;~T~  To add/modify Terminal Characteristics.
+ ;   -or- to Enter/Change DEFAULT Routine/Global Drives.
+FUN ;Enter the FIRST character of the desired function:
+ ;   ~D~: get a ~Directory~ of Routines or Globals (R/G).
+ ;   ~E~: ~Edit~ R/G
+ ;   ~L~: ~List~ (to specifed device) R/G
+ ;   ~F~: ~Find~ all occurences of specified string(s) or pattern(s)
+ ;   ~C~: ~Change~ all occurences of specified string(s) to new string(s)
+ ;   ~S~: ~Save~ R/G to given device (normally SDP as a CP/M file)
+ ;   ~R~: ~Restore~ Saved routines from specified device (usually SDM)
+ ;   ~K~: ~Kill~ R/G also killing entries in directory globals.
+ ;   ~X~: ~eXtended Directory~ also lists 1st two routine lines (if comments)
+ ;      or top global node if it contains data.
+FDR1 ;DESTINATION Disk Drive (A-H) to be retored TO.
+FDR2 ;SOURCE Disk Drive (A-H).
+RFRSH ;"Y" to refresh directory, or "?L" to get directory listing.
+OLD ;"Y" to use entries already selected.
+ ;"~?L~" gets you a display of the directory.
+ ;"~?S~" gets you a display of only Selected directory elements.
+NAME ;NAME(s) to be selected - question will be repeated until NULL.
+ ;Use "~?L~" for Directory, "~?S~" for Directory of Selected names only.
+ ;
+ ;Use "~'~" to ~DE-SELECT~ ("'XY*" removes all names starting with "XY").
+ ;
+ ;Use "~*~" to represent ANY number of characters, "~?~" to represent any SINGLE
+ ;   character. For example:
+ ;
+ ;   ~ABC~ will select ~only one name~ "ABC"
+ ;   ~A*C~ will select ~any name~ starting with "A" and ending with "C"
+ ;   ~A?C~ will select ~any 3-letter name~ starting with "A", ending in "C"
+TDR ;Restore FROM Drive (A-H).
+GREF ;Global Reference like "^XYZ" or "^XYZ(1" or "^XYZ(2,3)".
+ ;   Use ~Name only~ ("^XYZ") to do ~entire global~.
+ ;   Use ~Partial reference~ ("^XYZ(1") for ~all nodes~ (inclusive) under entry.
+ ;   Use ~Full reference~ ("XYZ(2,3)") for ~just that node~.
+ ;   Use ~?L~ for global directory.
+~ (inclusive) under entry.
+ ;   Use ~Fu

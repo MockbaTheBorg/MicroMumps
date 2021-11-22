@@ -1,0 +1,24 @@
+gtest	; Creates (and deletes) lots of test globals
+c	d values
+	w !,"Creating ",ncreate," globals."
+	f n=1:1:ncreate d create
+d	d values
+	w !,"Deleting ",ndelete," globals."
+	f n=1:1:ndelete d delete
+	q
+z	zd gtest zs gtest zp gtest q
+	;
+create	s name=pre_n
+	w !,"Creating "_name
+	f i=1:1:$r(50) s d=name_"("_i_")",@d="==="_d_"==="_txt_"===" w "."
+	q
+delete	s name=pre_$r(ncreate)
+	i $d(@name) w !,"Deleting "_name k @name
+	q
+values	;
+	s txt="TheQuickBrownFoxJumpsOverTheLazyDog"
+	s pre="^tst"
+	s ncreate=150
+	s ndelete=0
+	q
+

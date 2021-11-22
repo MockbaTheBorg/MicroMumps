@@ -1,0 +1,60 @@
+%M ;John Lewkowicz - NYS College of Vet. Medicine
+ ;Programmer Utilities - main entry point for Options & Dispatch
+ K  D CURRENT^%MTC S DS=";"
+ D:'$D(^%MD) ^%M8 S SDR=$E(^%MD,1),SDG=$E(^%MD,2),SDS=$E(^%MD,3) S:SDS=" " SDS="A"
+START K (DS,FF,RM,HL,LH,SDR,SDG,SDS) S $ZE="",X="Programmer Utilities - Version 1.25" W @FF,!,?RM\2-($L(X)\2),@LH,X,@HL,!!
+ROG S Q="ROG" W !,"Work on ",@LH,"R",@HL,"_outines, ",@LH,"G",@HL,"_lobals or on ",@LH,"T",@HL,"_erminal definitions."
+ W "     Choice: " D READ G ROG:E I A="" W @LH Q
+ S A=$E(UA,1) I A'?1U!("RGT"'[A) W *7," ??" G ROG
+ W ! S ROG=A I A="T" D ^%M5 G START
+FUN S Q="FUN" W ! F I=1:1:9 W @LH,$E("DELFCSRKX",I),@HL,"_",$P("irectory;dit;ist;ind;hange;ave;estore;ILL;tnd.Dir",DS,I),"  "
+ W !,"Choice: " D READ G FUN:E,START:"^"[A S A=$E(UA,1)
+ S FUN=A I FUN'?1U!("DELFCSRKX"'[A) W *7," ??" G FUN
+ W $P("irectory;dit;ist;ind;hange;ave;estore;ILL;-tended Directory",DS,$F("DELFCSRKX",A)-1)
+ S FR=FUN_ROG,FRG=$S(FR="RR":"RESR",FR="RG":"RESG",ROG="R":"ROU",1:"GBL")
+ W !
+FDR S Q="FDR"_$S(FUN="R":1,1:2)
+ W !,$P("Routines;Globals",DS,$F("RG",ROG)-1),@LH," ",$S(FUN="R":"TO",1:"FROM"),@HL," Drive (",@LH,"A-H",@HL,"): ",@LH,$S(ROG="R":SDR,1:SDG),@HL,"     :: "
+ I "ELFCK"[FUN,A'="^" S A=$S(ROG="R":SDR,1:SDG) G FDR1
+ D READ S:UA="" UA=$S(ROG="R":SDR,1:SDG) S A=$E(UA,1) G FDR:E,FUN:"^"[A
+ I A'?1U!("ABCDEFGH"'[A) W *7," ??" G FDR
+FDR1 S FDR=A W ! G TDR:",LG,FG,CG,"[FR!(FUN="E")
+FLAG G FLAG3:FUN="R" I '$D(^%MU(FRG)) D REFRESH G TDR:"DX"[FUN,FLAG3
+FLAG1 S Q="RFRSH" W !,"Refresh Directory? : ",@LH,"N",@HL,"  :: " D READ S:UA="" UA="N" S A=$E(UA,1) G FLAG1:E I A="^" W ! G FUN:"DLSK"'[FUN,FDR
+ I UA?1"?"1U D DIR^%M0:UA="?L",SDIR^%M0:UA="?S" G FLAG1
+ I "YN"'[A W *7," ??" G FLAG1
+ D:A="Y" REFRESH
+FLAG2 G TDR:"DX"[FUN
+ S Q="OLD" W !,"Use existing list of selected ",$S(ROG="R":"Routines",1:"Globals"),"? : ",@LH,"N",@HL,"  :: " D READ G FLAG2:E S:UA="" UA="N" S A=$E(UA,1)
+ I "^"[A W ! G FLAG1
+ I UA?1"?"1U D DIR^%M0:UA="?L",SDIR^%M0:UA="?S" G FLAG2
+ I "YN"'[A W *7," ??" G FLAG2
+ W ! G TDR:A="Y"
+ S S="" F I=1:1 S S=$O(^%MU(FRG,S)) Q:S=""  S ^(S)=0
+FLAG3 D FLAG3^%M5 G:A="^" FLAG2:FUN'="R",FDR G START:'N
+TDR K IO I "EK"'[FUN S Q="TDR" W !!,@LH,$S(FUN="R":"Restore FROM",1:"Output TO"),@HL D ^%MTC U 0 G FDR:IO="^"
+ S:'$D(IO) IO=0 G TDR1:IO'=5 I "SR"'[FUN W !!,*7,"Only ",@LH,"SAVE ",@HL,"& ",@LH,"RESTORE",@HL," to this device." G TDR
+ I A="^" C:IO'=$I IO:0 G TDR
+TDR1 I FUN="D" D LDIR^%M0 W ! G ROG
+ I FUN="X" D ^%M7 G START
+ I FUN="L" D @$S(ROG="R":"RLIST^%M0",1:"GLIST^%M0") G START
+ I FUN="E" G @$S(ROG="R":"REDIT^%M1",1:"GEDIT^%M1")
+ I FUN="K" D @$S(ROG="R":"RDEL^%M2",1:"GDEL^%M2") G FDR:A="^",START
+ I FUN="F" D @$S(ROG="R":"RFIND^%M2",1:"GFIND^%M2") G START
+ I FUN="C" D @$S(ROG="R":"RCHANGE^%M3",1:"GCHANGE^%M3") G FDR:A="^",START
+ I "RS"[FUN G ^%M4
+ B
+REFRESH W !,?5,"Collecting Directory now..."
+ ZO (FDR:FDR) O 2:(FDR:"SCRATCH.DAT") C 2:0 O 2:(FDR:"SCRATCH.DAT")
+ U 2 S X=$F("GR",ROG) V X W !,"*EOF*",! C 2:0
+ K ^%MU(FRG) O 2:(FDR:"SCRATCH.DAT")
+ F I=1:1 U 2 R X U 0 W "." Q:X="*EOF*"  S Y="" F I=1:1 S Z=$E(X,I) S:" "'[Z Y=Y_Z I " "[Z S:Y'="" ^%MU(FRG,Y)=0,Y="" Q:Z=""
+ C 2:1 ZO (SDR:SDG)
+ Q
+READ S E=0 W @LH R A:3600 D UPPER W @HL I A'="","??"[A D ^%M9 S E=1
+ Q
+UPPER S UA=A F I=1:1 Q:UA?.NUPC  S Y=$A(UA,I) S:Y>96&(Y<123) UA=$E(UA,0,I-1)_$C(Y-32)_$E(UA,I+1,255)
+ Q
+[A D ^%M9 S E=1
+ Q
+UPPER S UA=A F I=1:1 Q:UA?.NUPC  S Y=$A(UA,I) S:Y>96&(Y<123)

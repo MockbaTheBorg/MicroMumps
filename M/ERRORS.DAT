@@ -1,0 +1,58 @@
+Missing linestart character
+   Stack overflow
+                Arithmetic overflow
+           Undefined local variable
+      Illegal function name
+         Illegal command name
+          Undefined program name
+        Undefined global name
+         Global+value too long
+         Directory full
+                Program larger than partition
+ String too long
+               Unmatched parentheses
+         Illegal use of not operator
+   Illegal command terminator
+    Too many naked references
+     Unauthorized global access
+    Division by zero
+              Illegal character
+             Syntax stack overflow
+         Illegal expression
+            Illegal pattern
+               Missing comma
+                 Illegal variable name
+         Illegal use of indirection
+    Undefined routine line number
+ Illegal numeric literal
+       Missing equal sign
+            Illegal routine or label name
+ Invalid name syntax
+           Unimplemented operation
+       Symbol table overflow
+         NOT USED AT PRESENT
+           Duplicate label
+               Invalid line reference
+        No true value in $SELECT
+      Naked global reference illegal
+Global file not on disk
+       Routine not on disk
+           Disk I/O error
+                Routine is unnamed
+            Routine already in library
+    Remove or save routine
+        Only used in indirect mode
+    Illegal command during BREAK
+  Command only used during BREAK
+Subscript missing
+             Invalid subscript
+             Invalid parameter
+             Device not OPEN
+               Running out of global space
+   Reading from write only device
+Invalid device number
+         NOT USED (FOR EXPANSION)
+      Invalid repetition count
+      Invalid READ count
+
+

@@ -1,0 +1,42 @@
+%INDX2 ;REL - PROCESS "GRB" ; 02/05/81  1:52 PM ; ;9
+ F I=1:1 S CH=$E(GRB,I) D QUOTE:CH=Q I "^$@%?"""[CH!(CH?1U) Q
+ Q:CH=""  I CH="E",$E(GRB,I-1)?1N S S=$E(GRB,I+1) I S?1N!("+-"[S&($E(GRB,I+2)?1N)) S GRB=$E(GRB,I+2,999) G %INDX2
+ S GRB=$E(GRB,I,999) I CH="$" D FUN S GRB=$E(GRB,I,999) G %INDX2
+ I CH="?" D PAT G %INDX2
+ S X="CH?.P" S:CH="@" X=X_",(CH=""""!(""%@^$""'[CH))"
+ S:CH="^" X=X_",CH'=""%"""
+ F I=2:1 S CH=$E(GRB,I) D QUOTE:CH=Q,PAREN:CH="(" I @X Q
+ S S=$E(GRB,1,I-1),CH=$E(S,1)
+ G:CH'="^" L S S=$E(S,2,999) I $E(S,1)="(" S S=$E(S,2,999),LOC="N",GRB=$E(GRB,3,999) D ST G %INDX2
+ S LOC="G",ERR=12 G G
+L S LOC="L",ERR=11
+ I CH="@" S S=$E(S,2,999),GRB=$E(GRB,2,999) G %INDX2
+ I CH'="%",CH'?1U G ^%INDX1
+G S X=$P(S,"(",1) I X'?1"%".UN,X'?1U.UN G ^%INDX1
+ I S["(" S GRB=$P(GRB,"(",2,999)
+ E  S GRB=$E(GRB,I,999)
+ D ST G %INDX2
+FUN F I=2:1 Q:$E(GRB,I)'?1U
+ S X=$E(GRB,2,I-1),CH=$E(GRB,2) I $E(GRB,I)'="(" G SPV
+ I "ACDEFJLNOPRSTVZ"'[CH S ERR=3 G ^%INDX1
+ I $L(X)>1,CH'="Z",$P($T(FNC),";",2,999)'[(","_X_",") S ERR=3 G ^%INDX1
+ Q:$E(CH,1)'="T"  F I=I+1:1 S CH=$E(GRB,I) I CH'?1UN,CH'="%" Q
+ S R=4,S="" S:$E(GRB,4)="%" R=5,S="%" F R=R:1 Q:$E(GRB,R)'?.UN  S S=S_$E(GRB,R)
+ Q:S=""  S LOC="I" D ST Q
+SPV I "HIJSTXYZ"'[CH S ERR=4 G ^%INDX1
+ I $L(X)>1,CH'="Z",$P($T(SPC),";",2,999)'[(","_X_",") S ERR=4 G ^%INDX1
+ S LOC="L",S="$"_X D ST Q
+PAT F I=2:1 S CH=$E(GRB,I) D QUOTE:CH=Q I CH=""!(CH'?1N&("ACELNPU."'[CH)) Q
+ S GRB=$E(GRB,I,999) Q
+PAREN S PC=1
+P2 S I=I+1,CH=$E(GRB,I) I PC=0 Q
+P4 G P2:"()"""'[CH I CH="" S ERR=5 G ^%INDX1
+ I CH=Q D QUOTE G P4
+ S PC=PC+$S(CH="(":1,1:-1) G P2
+QUOTE S I=I+1,CH=$E(GRB,I) I CH="" S ERR=6 G ^%INDX1
+ G QUOTE:CH'=Q S I=I+1,CH=$E(GRB,I) G:CH=Q QUOTE Q
+ST S R=$F(S,"(") S:R>1 S=$E(S,1,R-1) I LOC="G",S'["(" S S=S_"("
+ Q:$D(V(LOC,S))  S V(LOC,S)="" Q
+FNC ;,ASCII,CHAR,DATA,EXTRACT,FIND,JUSTIFY,LENGTH,NEXT,ORDER,PIECE,RANDOM,SELECT,TEXT,VIEW,
+SPC ;,HOROLOG,IO,JOB,STORAGE,TEST,X,Y,
+

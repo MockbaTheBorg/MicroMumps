@@ -1,0 +1,45 @@
+SAVE OF TERMINALS DEFINITION
+5/25/83
+^%MTC(0)
+ADM3A
+^%MTC(1)
+OKI82A
+^%MTC(2)
+SDP
+^%MTC(3)
+SDP
+^%MTC(4)
+SDP
+^%MTC(5)
+XFER
+^%MTC("ADM3A")
+*26,#~*27,*41~*27,*40~79~24~W *27,"=",*DY+32,*DX+32~C-Lier Siegler ADM3A~O %IO U %IO W *27,*40
+^%MTC("DEFAULT")
+!!!!!!!!!!,#~*0~*0~79~24~W ""~C-Default Console~
+^%MTC("DM1521")
+#~*4~*24~79~24~W *30,*DX+32,*DY+32~C-DataMedia 1521~
+^%MTC("H19/Z19")
+*27,"E",#~*27,"q"~*27,"p"~79~23~W *27,"Y",*DY+32,*DX+32~C-Heath/Zenith~
+^%MTC("LA120")
+#~*0~*0~102~66~W ""~P-DEC LA120~
+^%MTC("OKI82A")
+#~*0~*0~131~66~W ""~P-OKIDATA 82A~O %IO U %IO W *29
+^%MTC("QUME")
+#~*0~*0~102~66~W ""~P-QUME~
+^%MTC("SDP")
+#~*0~*0~255~99999~W ""~O-CP/M Sequential File~D IOSDP
+^%MTC("TV910")
+*27,"*"~*0~*0~79~24~W *27,*61,*DY+32,*DX+32~C-Televideo 910~
+^%MTC("VC4404")
+*24,#~*14~*15~79~23~W *16,*DY+32,*DX+32~C-Volker Craig VC4404 CHAT~O %IO U %IO W *15
+^%MTC("VT100")
+*27,*91,*50,*74,*27,*74,#~*0~*0~80~24~W *27,*91,DY+1,*59,DX+1,*102~C-DEC VT100~
+^%MTC("VT52")
+*27,*72,*27,*74,#~*0~*0~79~24~W *27,*89,*DY+32,*DX+32~C-DEC VT52~
+^%MTC("X820")
+*26,#~*27,*41~*27,*40~79~24~W *27,*61,*DY+32,*DX+32~C-XEROX 820-II~
+^%MTC("XFER")
+*0~*0~*0~255~999999~W ""~O-Rdr/Pun MUMPS-MUMPS xfer.~
+
+*EOF*
+~79~24~W *27,*61,*DY+32,*DX+32~C-XEROX 820-II~

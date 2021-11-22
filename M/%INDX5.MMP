@@ -1,0 +1,34 @@
+%INDX5 ;REL - PRINT ROUTINE ; 20 AUG 82  11:03 AM
+ W !!,"--- CROSS REFERENCING ---",!
+ K (IOP1,IOP2,IOP3,NRO) G:'IOP3 B S RTN=0
+A S RTN=$N(^UTILITY($J,RTN)) I RTN=-1 G A1
+ K ^XCR($J,RTN,"T",RTN) S L=-1 F I=1:1 S L=$N(^XCR($J,RTN,"I",L)) Q:L=-1  S S=$P(L,"+",1) K ^XCR($J,RTN,"T",S)
+ S L=-1 F I=1:1 S L=$N(^XCR($J,RTN,"X",L)) Q:L=-1  S S=$P($P(L,"^",2),"+",1) I S'="" S P=$P(L,"^",1) K ^XCR($J,P,"T",S)
+ G A
+A1 S RTN=0,LABO=0
+A2 S RTN=$N(^UTILITY($J,RTN)) I RTN=-1 G B
+ S LAB=-1 F I=1:1 S LAB=$N(^XCR($J,RTN,"T",LAB)) Q:LAB=-1  S ERR=16 D ^%INDX1
+ G A2
+B W !!,"--- PRINT INDEX ---" K IOP D ^%MTC S IOP=$I
+B0 ;JAS VMTH AUG82 ; R !!?4,"DEVICE # FOR PRINTING INDEX: ",IO S:IO="" IO=IOP I IO'?1N.N W " ??" G B0
+ ; I IO'=IOP O IO::3 I '$T W "  ... UNAVAILABLE - CANNOT OPEN" G B0
+ S RTN=0 U IO
+B1 S RTN=$N(^UTILITY($J,RTN)) I RTN=-1 K ARG,I,L,M,P,PC,S,SYM,X G ^%INDX6
+ D:IOP2=2 ^%INDX8 W #!,RTN,"   ",^XCR($J,RTN,0),! G:'IOP2 B2
+ F I=1:1 Q:'$D(^XCR($J,RTN,0,I))  S L=^(I) W !,$P(L," ",1),?7,$P(L," ",2,999)
+B2 G:'IOP3!('$D(^XCR($J,RTN,"E",0))) B3 W !!,"*****   ERRORS & WARNINGS IN ",RTN,"   *****",!
+ F I=1:1 Q:'$D(^XCR($J,RTN,"E",I))  W !?3,^(I)
+B3 W !!,"*****   INDEX OF ",RTN,"   *****",!
+ W !,"LOCAL VARIABLES",?21,"LINE OCCURRENCES",! S M="L",SYM="" D P
+ W !!,"GLOBAL VARIABLES",! S M="G",SYM="^" D P
+ W !!,"NAKED GLOBALS",! S M="N",SYM="^(" D P
+ W !!,"LABEL REFERENCES",! S M="I",SYM="" D P
+ W !!,"EXTERNAL REFERENCES",! S M="X",SYM="^" D P
+ W !!,"*****   END   *****",! G B1
+P S L=-1,PC=0
+P1 S L=$N(^XCR($J,RTN,M,L)) I L=-1 W:'PC !?3,"NONE" Q
+ S PC=1 I M="X" W !?3,$P(L,"^",2),SYM,$P(L,"^",1),?16
+ E  W !?3,SYM,L,?16
+ S X=^(L) F I=1:1 S ARG=$P(X,",",I) Q:ARG=""  W:$X>70 !?16 W:$X'=16 "," W ARG
+ G P1
+

@@ -1,0 +1,9 @@
+%DIR ;CREATE DIRECTORY OF ROUTINE OR GLOBAL NAMES
+ R !,"Routines, Globals, or Files? (R/G/F) ",%D Q:%D=""  S %D=$E(%D) G:"RGF"'[%D %DIR
+X K ^%U S %V=$F("GRF",%D) O 3:("A":"SCRATCH.DAT") U 3 V %V C 3:0
+ O 3:("A":"SCRATCH.DAT") S %C=0
+ I %V'=4 F %J=0:1 U 3 R %D Q:$A(%D)=26  F %K=0:1:4 S %Y=$P($E(%D,%K*12+1,%K+1*12)," ") Q:%Y=""  S ^%U(%J*5+%K+1)=%Y,%C=%C+1
+ E  F %J=0:1 U 3 R %D Q:$A(%D)=26  F %K=0:1:3 S %Z=$P(%D,":",%K+1),%L=''%K,%Y=$P(%Z," ",1+%L),%Z=$P($E(%Z,10+%L,12+%L)," ",1) S:%Z'="" %Y=%Y_"."_%Z Q:%Y=""  S ^%U(%J*4+%K+1)=%Y,%C=%C+1
+ S ^%U(0)=%C
+ C 3:1 K %C,%D,%J,%K,%L,%Y,%Z Q
+

@@ -1,0 +1,46 @@
+%M8 ;John Lewkowicz - NYS College of Vet. Medicine
+ ;Cont. Programmer Utilities - 1st time initialization of defaults & Terminal Characteristics
+ S:'$D(SDR) (SDR,SDG,SDS)="" I '$D(FF) D CURRENT^%MTC S DS=";"
+ S X="Utility Initialization" W @LH,@FF,!,?RM\2-($L(X)\2),X,@HL,!!
+SDR S Q="SDR" W !,"Default ROUTINE Drive (",@LH,"A-H",@HL,"): " W:SDR'="" @LH,SDR,@HL,"  :: " D READ S:A="" (A,UA)=SDR G SDR:E Q:"^"[A  S A=$E(UA)
+ I A'?1U!("ABCDEFGH"'[A) W *7," ??" G SDR
+ S SDR=A W !
+SDG S Q="SDG" W !,"Default GLOBALS Drive (",@LH,"A-H",@HL,"): " W:SDG'="" @LH,SDG,@HL,"  :: " D READ S:A="" (A,UA)=SDG G SDG:E,SDR:"^"[A S A=$E(UA)
+ I A'?1U!("ABCDEFGH"'[A) W *7," ??" G SDG
+ S SDG=A W !
+SDS S Q="SDS" W !,"Default SDP Drive (",@LH,"A-H",@HL,"): " W:SDS'="" @LH,SDS,@HL,"  :: " D READ S:A="" (A,UA)=SDS G SDS:E,SDG:"^"[A S A=$E(UA)
+ I A'?1U!("ABCDEFGH"'[A) W *7," ??" G SDS
+ S SDS=A W !
+ S ^%MD=SDR_SDG_SDS_" Default Routine, Global, and SDP Drives for Programmer Utilities" W "  --> Filed.",!,@LH,!
+ Q:$D(^%MTC)  U 0 W !!,"Initialize Terminal Characteristics",!,"Use T_erminal option to set term. configuration.",!!
+ F I=1:1 S X=$T(%MTC+I) Q:X=""  S ^%MTC($P(X," ",1))=$P(X,";",2,99)
+ S ^%MTC="Terminal Characteristics and Port Definitions",^%MU="Programmer Utilities Scratch Area"
+ Q
+READ S E=0 W @LH R A:3600 D UPPER W @HL I A'="","??"[A D ^%M9 S E=1
+ Q
+UPPER S UA=A F I=1:1 Q:UA?.NUPC  S Y=$A(UA,I) S:Y>96&(Y<123) UA=$E(UA,0,I-1)_$C(Y-32)_$E(UA,I+1,255)
+ Q
+%MTC ;Initialize values for ^%MTC
+0 ;DEFAULT
+1 ;OKI82A
+2 ;SDP
+3 ;SDP
+4 ;SDP
+5 ;XFER
+DEFAULT ;!!!!!!!!!!,#~*0~*0~79~24~W ""~C-Default Console~
+XFER ;*0~*0~*0~255~999999~W ""~O-Rdr/Pun MUMPS-MUMPS xfer.~
+ADM3A ;*26,#~*27,*41~*27,*40~79~24~W *27,"=",*DY+32,*DX+32~C-Lier Siegler ADM3A~O %IO U %IO W *27,*40
+VC4404 ;*24,#~*14~*15~79~23~W *16,*DY+32,*DX+32~C-Volker Craig VC4404 CHAT~O %IO U %IO W *15
+DM1521 ;#~*4~*24~79~24~W *30,*DX+32,*DY+32~C-DataMedia 1521~
+TV910 ;*27,"*"~*0~*0~79~24~W *27,*61,*DY+32,*DX+32~C-Televideo 910~
+VT100 ;#,*27,*91,*72,*27,*91,*50,*74~*27,*91,*48,*109~*27,*91,*49,*109~80~24~W *27,*91,DY+1,*59,DX+1,*102~C-DEC VT100~*27,*91,*49,*109
+VT52 ;*27,*72,*27,*74,#~*0~*0~79~24~W *27,*89,*DY+32,*DX+32~C-DEC VT52~
+X820 ;*26,#~*27,*41~*27,*40~79~24~W *27,*61,*DY+32,*DX+32~C-XEROX 820-II~
+IBMPCXT ;#,*27,"[2J"~*27,"[1m"~*27,"[0m"~79~24~W *27,"[",DY,$C(59),DX,"H"~C-IBM-PCXT~O %IO U %IO W *27,"[1m"
+OKI82A ;#~*0~*0~131~66~W ""~P-OKIDATA 82A~O %IO U %IO W *29
+LA120 ;#~*0~*0~102~66~W ""~P-DEC LA120~
+QUME ;#~*0~*0~102~66~W ""~P-QUME~
+SDP ;#~*0~*0~255~99999~W ""~O-CP/M Sequential File~D IOSDP
+*0~*0~102~66~W ""~P-DEC LA120~
+QUME ;#~*0~*0~102~66~W ""~P-QUME~
+SDP ;#~*0~*0~25

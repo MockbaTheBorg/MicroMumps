@@ -1,0 +1,41 @@
+%INDX4 ;REL - PROCESS DO, GO TO, WRITE & FOR COMMANDS ; 02/05/81  1:53 PM ; ;11
+DG S LBL="",PGM="",OFF="",STR=1,L="+^:," S:$E(ARG,1,2)="@^" STR=3
+ D LOOP S LBL=$E(ARG,1,I-1)
+ I CH="+" S (STR,S)=I+1 S:$E(ARG,STR)="^" STR=STR+1 D LOOP S OFF=$E(ARG,S,I-1) I OFF'?.N S GRB=GRB_","_OFF
+ I CH="^" S STR=I+1 D LOOP S PGM=$E(ARG,STR,I-1)
+ I CH=":" S STR=I+1,L="," D LOOP S S=$E(ARG,STR,I-1) I S'="" S GRB=GRB_","_S
+ S ARG=$E(ARG,I+1,999)
+ I $E(LBL,1)="@" S GRB=GRB_","_$E(LBL,2,999),LBL="@("
+ I $E(PGM,1)="@" S GRB=GRB_","_$E(PGM,2,999),PGM="@("
+ S:OFF'="" LBL=LBL_"+"_OFF
+ S S="",LOC="I" I PGM'="" S S=S_PGM_"^",LOC="X"
+ S:LBL'="" S=S_LBL I S'="" D ST
+ G:ARG'="" DG K LBL,PGM,OFF Q
+LOOP F I=STR:1 S CH=$E(ARG,I) D QUOTE:CH=Q,PAREN:CH="(" Q:L[CH
+ Q
+PAREN S PC=1
+P2 S I=I+1,CH=$E(ARG,I) I PC=0 Q
+P4 G P2:"()"""'[CH I CH="" S ERR=5 G ^%INDX1
+ I CH=Q D QUOTE G P4
+ S PC=PC+$S(CH="(":1,1:-1) G P2
+QUOTE S I=I+1,CH=$E(ARG,I) I CH="" S ERR=6 G ^%INDX1
+ G QUOTE:CH'=Q S I=I+1,CH=$E(ARG,I) G:CH=Q QUOTE Q
+ST S R=$F(S,"(") S:R>1 S=$E(S,1,R-1)
+ S:'$D(V(LOC,S)) V(LOC,S)="" S:LOC="L" V(LOC,S)="+" Q
+FR Q:$E(ARG,1)="@"  S STR=2,L="=" D LOOP I CH="" S ERR=8 G ^%INDX1
+ S S=$E(ARG,1,I-1),ARG=$E(ARG,I+1,999),X=$P(S,"(",1) I X'?1"%".UN,X'?1U.UN S ERR=11 G ^%INDX1
+ S LOC="L" S:S["(" GRB=GRB_","_$P(S,"(",2,999) D ST Q
+WR F I=1:1:$L(ARG) S CH=$E(ARG,I) D QUOTE:CH=Q,PAREN:CH="(" I CH="?","!#,"[$E(ARG,I-1) D SET
+ Q
+SET S ARG=$E(ARG,1,I-1)_","_$E(ARG,I+1,999) Q
+XE S GRB=GRB_","_ARG
+REP S L=",:",STR=1 D LOOP I CH=":" S ARG=$E(ARG,I+1,999),L="," D LOOP
+ S ARG=$E(ARG,I+1,999) Q:ARG=""  G REP
+ZC I "ILRS"'[$E(COM,2)!($E(COM,2)="") S ARG="" Q
+ S COM=$E(COM,1,2) Q:COM="ZI"  G:COM="ZR" ZR
+U1 S L=",",STR=1 D LOOP S S=$E(ARG,1,I-1),ARG=$E(ARG,I+1,999)
+ S:$E(S,1)="@" S=$E(S,2,999),GRB=GRB_","_S Q:ARG=""  G U1
+ZR Q:ARG=""  S L=":,",STR=1 D LOOP S S=$E(ARG,1,I-1),ARG=$E(ARG,I+1,999)
+ I $E(S,1)="@" S GRB=GRB_","_S G ZR
+ S:S["+" GRB=GRB_","_$P(S,"+",2,999) G ZR
+

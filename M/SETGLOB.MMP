@@ -1,0 +1,95 @@
+setglob	;SETGLOB v4.06; by Marcelo Dantas ; Feb/2014
+	;Creates a fresh globals file for UCDavis Micromumps v4.xx
+	;seems to also work with v5.xx
+	s fn="GLOBALS.DAT"
+	s minsz=3 ; Minimum number of kbytes allowed
+	s maxsz=32740 ; Maximum number of kbytes allowed (CP/M)
+	; s maxsz=49109 ; Maximum number of kbytes allowed (MS-DOS)
+	s blksz=768 ; Size of the global file block in bytes
+	s hdrsz=7 ; Number of bytes in the file header
+	s z=$c(0) ; 0x00
+	s f=$c(255) ; 0xFF
+	;
+	s l0(1)=$c(127),l0(2)=$c(63),l0(3)=$c(31),l0(4)=$c(15) ; left zero bits
+	s l0(5)=$c(7),l0(6)=$c(3),l0(7)=$c(1),l0(8)=$c(0)
+	;
+	s l1(1)=$c(128),l1(2)=$c(192),l1(3)=$c(224),l1(4)=$c(240) ; left one bits
+	s l1(5)=$c(248),l1(6)=$c(252),l1(7)=$c(254),l1(8)=$c(255)
+	;
+	s $p(z128,z,128)=z ; 128 x 0x00
+	s $p(f128,f,128)=f ; 128 x 0xFF
+	;
+	w "SetGlob v4.06 for Z80 Mumps CP/M",!
+	w "rebuilt in Feb/2014 by Marcelo Dantas",!
+	w "marcelo.f.dantas@gmail.com",!
+	; Inputs the drive
+gdr	w !,"Which drive you want the globals on? (",$zg,"): "
+	r *dr
+	q:(dr=3)!(dr=27)  ; Quits if ^C or ESC
+	s:dr=13 dr=$a($zg) ; Enter = default
+	w *dr
+	s:dr>96 dr=dr-32 ; toupper (rough code)
+	i (dr<65)!(dr>80) w !,"... A to P only (ESC to exit)" g gdr ; Only accepts A to D
+	s dr=$c(dr)
+	s x=$zr ; Save current routine drive
+	zo:dr'=$zr dr ; Select new drive
+	i $ze(fn) w !,"... ",fn," already exists on that drive (ESC to exit)" zo x g gdr
+	zo x ; Restore current routine drive
+	;
+	; Inputs the size in Kbytes of the file to create
+gsz	w !,"Enter the maximum size for your global file in Kbytes (",minsz,"): "
+	r sz
+	i sz="" s sz=minsz
+	i sz<minsz w !,"... minimum ",minsz," Kbytes" g gsz
+	i sz>maxsz w !,"... maximum ",maxsz," Kbytes" g gsz
+pre	w !,"Preallocate the entire file size (Y/N):"
+	r *yn
+	q:(yn=3)!(yn=27)  ; Quits if ^C or ESC
+	w *yn
+	s:yn>96 yn=yn-32 ; toupper
+	i (yn'=78)&(yn'=89) w !,"... Y or N only (ESC to exit)" g pre
+	;
+	s t0=$p($h,",",2)
+	; Starts creating the directory bitmaps
+	s szbytes=sz*1024 ; Size in bytes
+	s nb=szbytes\blksz ; Number of total blocks to generate
+	w !,"Number of ",blksz,"bytes block to write: ",nb
+	s nbyt=nb\8 s:nb#8'=0 nbyt=nbyt+1
+	w !,"Number of bytes on the directory: ",nbyt
+	s nbyt=nbyt+hdrsz ; accounts for the header
+	s dirbk=nbyt\blksz s:nbyt#blksz'=0 dirbk=dirbk+1
+	w !,"Number of blocks on the header/directory: ",dirbk
+	s databk=nb-dirbk
+	w !,"Number of free data blocks: ",databk
+	s b1=databk#256 ; high byte (modulus)
+	s b2=databk\256 ; low byte (integer division)
+	i yn=78 s r128=dirbk*6 ; write dir only
+	e  s r128=nb*6 ; preallocate all
+	w !,"Number of bytes on disk: ",r128*128
+	w !,"Writing ",fn," please wait..."
+	; starts writing the file
+	o 2:(dr:fn) ; opens the file for writing
+	; builds the header
+	s r=$c(255)_$c(255)_$c(255)_$c(dirbk)_$c(0)_$c(b1)_$c(b2)
+	s c=7 ; counts the number of bytes mapped
+	; maps the already occupied blocks
+oc0	i dirbk>8 s r=r_l0(8),c=c+1,dirbk=dirbk-8 g oc0
+	s:dirbk>0 r=r_l0(dirbk),c=c+1,databk=databk-(8-dirbk)
+	s:databk<0 databk=0
+	; goes on mapping the free blocks
+fb0	i databk>8 s r=r_l1(8),c=c+1,databk=databk-8 g:c=128 c128 g fb0
+	i databk>0 s r=r_l1(databk),c=c+1
+fb1	i c<128 s r=r_z,c=c+1 g fb1
+	g f128
+c128	u 2 w r u 0 s r="",c=0,r128=r128-1 g:r128=0 fdir
+c128a	i databk>1024 s databk=databk-1024,r=f128 g c128
+	g fb0
+f128	s:r128=1 r=$e(r,1,127) u 2 w r u 0 s r128=r128-1,r=z128 g:r128>0 f128
+fdir	c 2:0
+	;
+	w !,"Finished creating GLOBALS.DAT"
+	s t1=$p($h,",",2)
+	w:t0'=t1 " in ",t1-t0," seconds"
+	w "."
+	q
+z	zs setglob zp setglob q

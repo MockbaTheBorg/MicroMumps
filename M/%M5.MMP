@@ -1,0 +1,34 @@
+%M5 ;John Lewkowicz - NYS College of Vet. Medicine
+ ;Cont. Programmer Utilities - Control Terminal Def., Flag Routines/Globals in ^%MU
+ S X="Terminal Characteristics" W @FF,@LH,!,?RM\2-($L(X)\2),X,!!
+ W !,@LH,"1",@HL," - Edit/Add Terminal Definitions."
+ W !,@LH,"2",@HL," - Assign Terminal to Physical Port."
+ W !!,@LH,"3",@HL," - Assign DEFAULT Routine, Global Drives.",!
+TERM S Q="TERM" W !,"Choice: " D READ G TERM:E Q:"^"[A
+ I A'?1N!("123"'[A) W *7," ??" G TERM
+ I A=3 D ^%M8 Q
+ I A=1 D DEFINE^%MTC,CURRENT^%MTC G %M5
+ D DEFAULT^%MTC,CURRENT^%MTC G %M5
+READ S E=0 W @LH R A:3600 D UPPER W @HL I A'="","??"[A D ^%M9 S E=1
+ Q
+UPPER S UA=A F I=1:1 Q:UA?.NUPC  S Y=$A(UA,I) S:Y>96&(Y<123) UA=$E(UA,0,I-1)_$C(Y-32)_$E(UA,I+1,255)
+ Q
+FLAG3 S N=0 K:FUN="R" ^%MU(FRG)
+FLAG4 S Q="NAME" W !,$S(ROG="R":"Routine",1:"Global"),": " W:ROG="G" @LH,"^" D READ G FLAG4:E
+ S A=UA,OA=A Q:"^"[A
+ I UA?1"?"1U,FUN="R" S S="" W !,"Restore Specifications:",! F I=1:1 S S=$O(^%MU(FRG,S)) G FLAG4:S="" W ?5,$P(^(S),DS,1),!
+ I UA?1"?"1U D DIR^%M0:UA="?L",SDIR^%M0:UA="?S" G FLAG4
+ S NOT=A?1"'".E S:NOT A=$E(A,2,255) S (IF,Z)="",Y=A I A="*" S IF=".E" G FLAG6
+FLAG5 S C=$E(Y),Y=$E(Y,2,255)
+ I "?*"[C S:Z'="" Z=Z_"""" S IF=IF_Z_$S(C="*":".E",C="?":"1E",1:""),Z="" G FLAG6:C="",FLAG5
+ S:Z="" Z="1""" S Z=Z_C G FLAG5
+FLAG6 D:FUN'="R" FLAGIT S N=N+1 S:FUN="R" ^%MU(FRG,N)=OA_DS_IF G FLAG4
+FLAGIT ZO (FDR:FDR)
+ S NF=0 I $D(^%MU(FRG,A)) S ^(A)=$S(NOT:0,1:1),NF=1 W "   Done." G FLAGX
+ S S="",L=0 I IF?1"1""".E S A=$P(IF,"""",2),L=$L(A),S=$E(A,0,L-1)_$C($A(A,L)-1)_"|"
+ F I=1:1 S S=$O(^%MU(FRG,S)) Q:S=""!($E(S,0,L)'=$E(A,0,L))  I S?@IF S ^(S)=$S(NOT:0,1:1),NF=NF+1
+ W "   ",NF," found."
+FLAGX ZO (SDR:SDG)
+ Q
+MU(FRG,S)) Q:S=""!($E(S,0,L)'=$E(A,0,L))  I S?@IF S ^(S)=$S(NOT:0,1:1),NF=NF+1
+ 

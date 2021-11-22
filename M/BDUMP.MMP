@@ -1,0 +1,17 @@
+bdump	; Dumps globals.dat blocks
+	; by Marcelo Dantas
+	k  s bsize=768,ssize=128,f=4,dr=$zg,h="0123456789abcdef"
+	w !,"Building hex conv table..."
+	f i=0:1:255 s z(i)=$e(h,i\16+1)_$e(h,i#16+1)
+	w "done"
+	w !,"Dumps from ",dr,":GLOBALS.DAT"
+	o f:(dr:"GLOBALS.DAT":8)
+rb	r !,"Block : ",b q:b=""
+	w !,"       0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F"
+	s pos=b*bsize/ssize,count=0,asc="",l=0
+	u f:pos u 0
+nl1	w !,$j(count*16,4),": " s count=count+1
+	s asc="" f i=1:1:16 u f r *c u 0 w z(c)," " s c=$c(c),asc=asc_$s(c?1ULNP:c,1:".")
+	w asc s l=l+1 g:l=48 rb
+	g nl1
+z	zs bdump zp bdump q
