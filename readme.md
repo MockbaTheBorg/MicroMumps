@@ -4,7 +4,7 @@ This is a restoration of the original MicroMumps 4.06 for CP/M which I have been
 This code will build through the tniasm Z80 compiler, BAT files provided.
 
 IMPORTANT: For SETMUMPS.COM you have to pass on the command line the name of the mumps executable you want to modify. Example: SETMUMPS MUMPS.COM.
-Then it will looks for the correct file name (as I have both MUMPS.COM and MUMPSB.COM).
+Then it will look for the correct file name (as I have both MUMPS.COM and MUMPSB.COM).
 
 This project was blessed by Professor Richard "Dick" Walters, original author of the code, and to whom I dedicate all the effort of putting this together.
 
