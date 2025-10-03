@@ -1,10 +1,15 @@
-%DATE S %DT=$P($H,",",1)
- S %H=%DT>21608+%DT+1460,%L=%H\1461,%YR=%H#1461
- S %Y=%L*4+1837+(%YR\365),%D=%YR#365+1
- S %M=1 I %YR=1460 S %D=366,%Y=%Y-1
- F %I=31,%Y#4=0+28,31,30,31,30,31,31,30,31,30,31 Q:%D'>%I  S %D=%D-%I,%M=%M+1
- S:%D<10 %D="0"_%D
- S %M=$E("JANFEBMARAPRMAYJUNJULAUGSEPOCTNOVDEC",%M*3-2,%M*3)
- S %DT=%M_" "_%D_", "_%Y
- K %H,%L,%YR,%Y,%M,%D,%I Q
-
+%DATE	; Collect date information
+	S %DT=$P($H,",",1)
+	S %W=%DT#7+1
+	S %H=%DT>21608+%DT+1460,%L=%H\1461,%YR=%H#1461
+	S %Y=%L*4+1837+(%YR\365),%D=%YR#365+1
+	S %M=1 I %YR=1460 S %D=366,%Y=%Y-1
+	F %I=31,%Y#4=0+28,31,30,31,30,31,31,30,31,30,31 Q:%D'>%I  S %D=%D-%I,%M=%M+1
+	S:%D<10 %D="0"_%D
+	S %MO=$E("JANFEBMARAPRMAYJUNJULAUGSEPOCTNOVDEC",%M*3-2,%M*3)
+	S %Y=%Y+34
+	S %WD=$E("THUFRISATSUNMONTUEWED",%W*3-2,%W*3)
+	S %DT=%WD_", "_%MO_" "_%D_", "_%Y
+	K %H,%L,%YR,%I Q
+Z	ZS %DATE ZP %DATE Q
+

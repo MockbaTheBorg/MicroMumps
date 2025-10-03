@@ -22,12 +22,13 @@ FileReg		equ	MumpsFCB+32
 		call	BDOS
 rMumpsDR:
 		ld	c, 9		; Output string
-		ld	de, EnterDrive	; "Enter drive of the MUMPS.COM to change"
+		ld	de, EnterDrive	; "Enter drive letter of the MUMPS.COM to change"
 		call	BDOS
 		call	ReadDR		; Reads drive letter, returns in a
 		jp	c, rMumpsDR
 		cp	0FFh		; Is it invalid?
 		jp	z, rMumpsDR
+		ld	(MumpsDrive), a
 		ld	e, a
 		ld	c, 14		; Select disk
 		call	BDOS
@@ -35,7 +36,25 @@ rMumpsDR:
 		ld	de, MumpsFCB
 		call	BDOS
 		inc	a
-		jp	z, rMumpsDR	; Not found
+		jp	nz, Continue
+; copy Default to 005Dh
+		ld	c, 9
+		ld	de, Trying
+		call	BDOS
+		ld	hl, Default
+		ld	de, MumpsFCB+1
+		ld	bc, 11
+		ldir
+		ld	a, (MumpsDrive)
+		ld	e, a
+		ld	c, 14		; Select disk
+		call	BDOS
+		ld	c, 15		; Open file
+		ld	de, MumpsFCB
+		call	BDOS
+		inc	a
+		jp	z, rMumpsDR
+Continue:
 		ld	hl, DiskBuf
 		ld	(DiskBufLoc), hl
 		xor	a
@@ -444,6 +463,9 @@ YesNo2:
 ; End of function YesNo
 ;
 ; ---------------------------------------------------------------------------
+Default:	db "MUMPS   COM"
+Trying:		db 0Dh,0Ah,"Trying default name MUMPS.COM...$"
+NotFound:	db 0Dh,0Ah,"Executable not found.$"
 Greet:		db 'SetMumps v4.06 for Z80 Mumps CP/M',0Dh,0Ah
 		db 'rebuilt in Feb/2014 by Marcelo Dantas',0Dh,0Ah
 		db 'marcelo.f.dantas@gmail.com',0Dh,0Ah,'$'
@@ -484,8 +506,9 @@ NoRoom:		db 0Dh,0Ah
 ;FileReg:	ds    4
 DiskBufLoc:	dw    0			; Location of the disk buffer
 SaveSP:		dw    0			; Save the stack pointer here
+MumpsDrive: db    0			; Drive of the MUMPS.COM to change (0=A,1=B,... 0FFh=invalid)
 		ds    11
-iBUFFER:	db    5			; Buffer for reading console input
+iBUFFER:	db    11		; Buffer for reading console input
 BUFFER:		ds    40
 		ds    20
 		db    0
@@ -866,3 +889,4 @@ iAEBUF:		db    0			; Buffer for reading the autoexec
 		db    0
 		db    0
 		db    0
+

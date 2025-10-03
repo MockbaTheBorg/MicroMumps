@@ -1,0 +1,117 @@
+; ===========================================================================
+; UC Davis MicroMumps for CP/M - version 4.06
+; Rebuilt by Marcelo F. Dantas in February of 2014
+; marcelo.f.dantas@gmail.com
+; ===========================================================================
+;
+; ---------------------------------------------------------------------------
+; enum Chars
+BS               equ 8
+TAB              equ 9
+LF               equ 0Ah
+FF               equ 0Ch
+CR               equ 0Dh
+EOF              equ 1Ah                ; ^Z=SUB/EOF
+Blank            equ 20h                ; Space
+Exclamation      equ 21h
+Quotes           equ 22h                ; "
+Pound            equ 23h
+Dollar           equ 24h
+Percent          equ 25h
+LeftP            equ 28h
+RightP           equ 29h
+Asterisk         equ 2Ah
+Plus             equ 2Bh
+Comma            equ 2Ch
+Minus            equ 2Dh
+Point            equ 2Eh
+Slash            equ 2Fh
+Colon            equ 3Ah
+Semicolon        equ 3Bh
+Question         equ 3Fh
+LeftB            equ 5Bh
+Backslash        equ 5Ch
+Carat            equ 5Eh
+DEL              equ 7Fh
+; ---------------------------------------------------------------------------
+; enum BdosCalls
+ReaderIn         equ 3                  ; BDOS call 3
+PunchOut         equ 4                  ; BDOS call 4
+PrintOut         equ 5                  ; BDOS call 5
+ConsoleIO        equ 6                  ; BDOS call 6
+PrintString      equ 9                  ; BDOS call 9
+BufferIn         equ 0Ah                ; BDOS call 10
+ResetDisk        equ 0Dh                ; BDOS call 13
+OpenFile         equ 0Fh                ; BDOS call 15
+CloseFile        equ 10h                ; BDOS call 16
+SearchFirst      equ 11h                ; BDOS call 17
+DeleteFile       equ 13h                ; BDOS call 19
+ReadNext         equ 14h                ; BDOS call 20
+WriteNext        equ 15h                ; BDOS call 21
+MakeFile         equ 16h                ; BDOS call 22
+SetDMA           equ 1Ah                ; BDOS call 26
+ReadRandom       equ 21h                ; BDOS call 33
+FileSize         equ 23h                ; BDOS call 35
+; ---------------------------------------------------------------------------
+; enum BiosCalls
+ConSt            equ 3                  ; BIOS call 3
+ConIn            equ 6                  ; BIOS call 6
+ConOut           equ 9                  ; BIOS call 9
+LstOut           equ 0Ch                ; BIOS call 12
+HomeDsk          equ 15h                ; BIOS call 21
+; ---------------------------------------------------------------------------
+; enum Bool
+FALSE            equ 0
+TRUE             equ 1
+; ---------------------------------------------------------------------------
+; enum CPM
+BOOT             equ 0
+BDOS             equ 5
+Page0FCB         equ 5Ch
+Page0BUF         equ 80h
+; ---------------------------------------------------------------------------
+; enum Mumps
+STRNG            equ 1
+PTRLN            equ 2                  ; Size of a Pointer (2)
+NOTFL            equ 2
+TokenTable       equ 3                  ; Page number of the Token Table
+MulTable         equ 4                  ; Page number of the Multiplication Table
+DIRTY            equ 4
+INTLN            equ 5                  ; Size of an Integer (5)
+LBLLN            equ 8                  ; Max size of a label
+BRAKE            equ 8
+FLTLN            equ 0Eh                ; Size of a Float/BCD (14)
+Prompt           equ 3Eh                ; >
+; ---------------------------------------------------------------------------
+; enum Tokens
+tknLowercase     equ 1
+tknUppercase     equ 2
+tknNumber        equ 3
+tknQuote         equ 4
+tknPlus          equ 5
+tknMinus         equ 6
+tknAsterisk      equ 7
+tknPound         equ 9
+tknAmper         equ 0Bh
+tknExclamation   equ 0Ch
+tknGtrT          equ 0Eh
+tknEqual         equ 11h
+tknUnderscore    equ 12h
+tknPercent       equ 13h
+tknCarat         equ 14h
+tknComma         equ 15h
+tknColon         equ 16h
+tknQuotes        equ 17h
+tknAt            equ 18h
+tknLeftP         equ 19h
+tknRightP        equ 1Ah
+tknDollar        equ 1Bh
+tknPoint         equ 1Ch
+tknSemicolon     equ 1Dh
+tknQuestion      equ 1Eh
+tknBlank         equ 1Fh
+tknCurlR         equ 24h
+tknTAB           equ 25h
+tknCRLF          equ 26h
+tknInvalid       equ 32h
+

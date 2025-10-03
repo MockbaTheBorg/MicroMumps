@@ -1,5 +1,6 @@
 glist	; Lists contents of a global or variable
 	; by Marcelo Dantas
+	; v1.0
 	;
 r	r !!,"Global name: ^",name q:name=""
 	i name="?" w ! v 2 g r
@@ -39,3 +40,5 @@ testset	;
 	q
 	;
 z	zs glist zp glist q
+	s tst(2,10)="leaf 2,10"
+	

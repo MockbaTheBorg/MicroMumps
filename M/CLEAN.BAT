@@ -1,4 +1,8 @@
 @echo off
+if exist MUMPS.CIM del MUMPS.CIM
+if exist MUMPSB.CIM del MUMPSB.CIM
+if exist SETMUMPS.CIM del SETMUMPS.CIM
+if exist SETGLOB.CIM del SETGLOB.CIM
 if exist MUMPS.COM del MUMPS.COM
 if exist MUMPSB.COM del MUMPSB.COM
 if exist SETMUMPS.COM del SETMUMPS.COM

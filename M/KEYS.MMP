@@ -1,0 +1,17 @@
+keys	; Show command keys
+	w !,"Press 'q' to quit."
+0	w !,": "
+	k a
+	r *a(0),*a(1):1,*a(2):1,*a(3):1,*a(4):1,*a(5):1,*a(6):1
+	s a(7)=-1
+	q:a(0)=113
+	f i=0:1:6 d 1
+	g 0
+1	i a(i)=27 w "ESC" q
+	i i=1 w *a(i) q
+	i a(i)=-1 q
+	w a(i)
+	w:a(i+1)>-1 ","
+	q
+z	zs keys zp keys q
+
