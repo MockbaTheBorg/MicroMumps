@@ -6,7 +6,6 @@
 ;
 ; Makefile for the text file version
 ;
-BINMODE		equ	0
-		include head.z80
-		include	mumps2.z80
+BINMODE:	equ	0
+include		'MUMPS2.Z80'
 ;

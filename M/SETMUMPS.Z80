@@ -4,14 +4,10 @@
 ; marcelo.f.dantas@gmail.com
 ; ===========================================================================
 ;
-		org	0100h
-; ---------------------------------------------------------------------------
-BOOT		equ	0000h
-BDOS		equ	0005h
-BDOSaddr	equ	0006h
-MumpsFCB	equ	005ch
-FileReg		equ	MumpsFCB+32
-; ---------------------------------------------------------------------------
+include 'HEAD.Z80'
+;
+        org 100h
+;
 		ld	hl, 0
 		add	hl, sp
 		ld	(SaveSP), hl
@@ -33,7 +29,7 @@ rMumpsDR:
 		ld	c, 14		; Select disk
 		call	BDOS
 		ld	c, 15		; Open file
-		ld	de, MumpsFCB
+		ld	de, Page0FCB
 		call	BDOS
 		inc	a
 		jp	nz, Continue
@@ -42,7 +38,7 @@ rMumpsDR:
 		ld	de, Trying
 		call	BDOS
 		ld	hl, Default
-		ld	de, MumpsFCB+1
+		ld	de, Page0FCB+1
 		ld	bc, 11
 		ldir
 		ld	a, (MumpsDrive)
@@ -50,7 +46,7 @@ rMumpsDR:
 		ld	c, 14		; Select disk
 		call	BDOS
 		ld	c, 15		; Open file
-		ld	de, MumpsFCB
+		ld	de, Page0FCB
 		call	BDOS
 		inc	a
 		jp	z, rMumpsDR
@@ -67,7 +63,7 @@ ReadSecs:
 		ex	de, hl
 		call	BDOS
 		ld	c, 20		; Read next record
-		ld	de, MumpsFCB
+		ld	de, Page0FCB
 		call	BDOS
 		ld	hl, (DiskBufLoc)
 		ld	de, 128
@@ -302,7 +298,7 @@ WriteCHG2:
 		ex	de, hl
 		call	BDOS
 		ld	c, 21		; Write next record
-		ld	de, MumpsFCB
+		ld	de, Page0FCB
 		call	BDOS
 		ld	hl, (DiskBufLoc)
 		ld	de, 128
@@ -500,7 +496,7 @@ Enough:		db 0Dh,0Ah
 		db 'Is that enough room? (Y/N) $'
 NoRoom:		db 0Dh,0Ah
 		db 'Not enough room for GLOBAL buffers$'
-;MumpsFCB:	db    0
+;Page0FCB:	db    0
 ;		db 'MUMPS   COM'
 ;		ds    20
 ;FileReg:	ds    4
@@ -889,4 +885,3 @@ iAEBUF:		db    0			; Buffer for reading the autoexec
 		db    0
 		db    0
 		db    0
-
